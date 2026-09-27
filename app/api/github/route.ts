@@ -55,6 +55,10 @@ async function github(path: string, token: string, init: RequestInit = {}) {
 export async function GET(request: Request) {
   const user = await requireUser(request);
   if (!user) return error('Sign in first.', 401);
+  const ownerId = process.env.GITHUB_BRIDGE_OWNER_ID?.trim();
+  if (!ownerId) return error('GitHub owner access is not configured.', 503);
+  if (user.id !== ownerId) return error('Owner access required.', 403);
+
   const cfg = config();
   if (!cfg) return error('GitHub bridge is not configured.', 503);
 
@@ -73,6 +77,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const user = await requireUser(request);
   if (!user) return error('Sign in first.', 401);
+  const ownerId = process.env.GITHUB_BRIDGE_OWNER_ID?.trim();
+  if (!ownerId) return error('GitHub owner access is not configured.', 503);
+  if (user.id !== ownerId) return error('Owner access required.', 403);
+
   const cfg = config();
   if (!cfg) return error('GitHub bridge is not configured.', 503);
 
