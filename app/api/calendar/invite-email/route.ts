@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   const sb = createClient(url, key, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
   const { data: identity, error: authError } = await sb.auth.getUser(token);
   if (authError || !identity.user) return Response.json({ error: 'Sign in again.' }, { status: 401 });
-  const { data: invitation } = await sb.from('xp_calendar_invites').select('id,owner_id,invitee_email,calendar_name,email_sent_at,expires_at').eq('id', body.inviteId).single();
+  const { data: invitation } = await sb.from('xp_calendar_invites').select('id,owner_id,invitee_email,calendar_name,invite_message,email_sent_at,expires_at').eq('id', body.inviteId).single();
   if (!invitation || invitation.owner_id !== identity.user.id || new Date(invitation.expires_at) <= new Date()) return Response.json({ error: 'Invitation unavailable.' }, { status: 403 });
   if (invitation.email_sent_at) return Response.json({ error: 'This invitation email was already sent. Copy its link if needed.' }, { status: 409 });
   const claimed = await sb.from('xp_calendar_invites').update({ email_sent_at: new Date().toISOString() }).eq('id', invitation.id).is('email_sent_at', null).select('id').maybeSingle();
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from, to: [invitation.invitee_email], subject: `Invitation to ${invitation.calendar_name} on Planned Out`, text: `You have been invited to ${invitation.calendar_name}. Sign in with ${invitation.invitee_email} to accept: ${link}` })
+    body: JSON.stringify({ from, to: [invitation.invitee_email], subject: `Invitation to ${invitation.calendar_name} on Planned Out`, text: `${invitation.invite_message ? `${invitation.invite_message}\n\n` : ''}You have been invited to ${invitation.calendar_name}. Sign in with ${invitation.invitee_email} to accept: ${link}` })
   });
   if (!response.ok) {
     await sb.from('xp_calendar_invites').update({ email_sent_at: null }).eq('id', invitation.id);

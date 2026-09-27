@@ -124,6 +124,9 @@
   .preset-quantum-blue .stat:first-child{grid-column:auto}
   .preset-holo-split .grid.two,.preset-matrix-flow .grid.two{grid-template-columns:1fr}
 }
+.calendar-invite-message-field{grid-column:1/-1}
+.calendar-invite-form textarea{display:block;min-width:0;width:100%;background:var(--card2);border:1px solid var(--line);border-radius:11px;color:var(--text);padding:10px;outline:0;resize:vertical;font:inherit}
+.calendar-invite-note{white-space:pre-wrap;overflow-wrap:anywhere;margin:6px 0 0;color:var(--text);font-size:12px}
 @media(max-width:780px){
   .preset-holo-split{flex-direction:initial}
   .preset-holo-split .sidebar{border-left:0;border-right:1px solid var(--line)}

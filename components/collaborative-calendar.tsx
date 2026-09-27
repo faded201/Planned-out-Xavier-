@@ -36,6 +36,7 @@ type CalendarInvite = {
   calendar_name: string;
   owner_id: string;
   invitee_email: string;
+  invite_message: string;
   role: CalendarRole;
   created_at: string;
   expires_at: string;
@@ -156,6 +157,7 @@ export function CollaborativeCalendar({
   const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState<EventForm>(EMPTY_FORM);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteMessage, setInviteMessage] = useState('');
   const [inviteRole, setInviteRole] = useState<CalendarRole>('viewer');
   const [newCalendarName, setNewCalendarName] = useState('Family Calendar');
   const [busy, setBusy] = useState(false);
@@ -383,12 +385,14 @@ export function CollaborativeCalendar({
       calendar_id: activeCalendar.id,
       owner_id: user.id,
       invitee_email: inviteEmail.trim().toLowerCase(),
+      invite_message: inviteMessage.trim(),
       role: inviteRole,
       calendar_name: activeCalendar.name
     }).select('id').single();
     setBusy(false);
     if (error) return notify(error.code === '23505' ? 'That person already has a pending invitation.' : error.message);
     setInviteEmail('');
+    setInviteMessage('');
     await refreshAccess();
     const { data: session } = await sb.auth.getSession();
     const sent = await fetch('/api/calendar/invite-email', {
@@ -451,10 +455,23 @@ export function CollaborativeCalendar({
     notify('Member permission updated.');
   }
 
-  async function copyInvite(invite: CalendarInvite) {
+  async function shareInvite(invite: CalendarInvite) {
     const url = `${window.location.origin}/?calendarInvite=${encodeURIComponent(invite.id)}`;
-    await navigator.clipboard.writeText(url);
-    notify('Invite link copied. The invited email must sign in to accept it.');
+    const text = `${invite.invite_message ? `${invite.invite_message}\n\n` : ''}You're invited to ${invite.calendar_name} on Planned Out. Sign in with ${invite.invitee_email} to accept: ${url}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: `Invitation to ${invite.calendar_name}`, text });
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      notify('Invite message and link copied. Paste it into a message to the invited person.');
+    } catch {
+      notify('Could not copy. Check your browser clipboard permission.');
+    }
   }
 
   const privateTasksForDay = (date: string) => tasks.filter((task) => task.startDate === date || task.dueDate === date);
@@ -484,7 +501,7 @@ export function CollaborativeCalendar({
     {incomingInvites.length > 0 && <div className="calendar-invite-banner">
       <div><strong>{incomingInvites.length} calendar invitation{incomingInvites.length === 1 ? '' : 's'}</strong><span>Waiting for your response</span></div>
       <div className="calendar-invite-stack">{incomingInvites.map((invite) => {
-        return <div className="calendar-invite-card" key={invite.id}><div><b>{invite.calendar_name || 'Shared calendar'}</b><small>{roleLabel(invite.role)}</small></div><button onClick={() => void declineInvite(invite.id)}>Decline</button><button className="primary" disabled={busy} onClick={() => void acceptInvite(invite)}>Accept</button></div>;
+        return <div className="calendar-invite-card" key={invite.id}><div><b>{invite.calendar_name || 'Shared calendar'}</b><small>{roleLabel(invite.role)}</small>{invite.invite_message && <p className="calendar-invite-note">{invite.invite_message}</p>}</div><button onClick={() => void declineInvite(invite.id)}>Decline</button><button className="primary" disabled={busy} onClick={() => void acceptInvite(invite)}>Accept</button></div>;
       })}</div>
     </div>}
 
@@ -546,12 +563,12 @@ export function CollaborativeCalendar({
 
     {showPeople && activeCalendar && <div className="modal"><div className="modal-card calendar-people-modal"><button className="x" onClick={() => setShowPeople(false)}>×</button><p className="eyebrow">PEOPLE &amp; ACCESS</p><h2>{activeCalendar.name}</h2><p className="calendar-modal-intro">The owner controls membership. Removing someone revokes their access to this calendar and its shared events.</p>
       <div className="calendar-owner-row"><div className="member-avatar owner">{isOwner ? initials(user?.email || 'Owner') : 'OW'}</div><div><b>{isOwner ? (user?.email || 'You') : 'Calendar owner'}</b><small>{isOwner ? 'You own this calendar' : 'Owner-managed calendar'}</small></div>{isOwner && <span className="owner-badge">OWNER</span>}</div>
-      {isOwner && <form className="calendar-invite-form" onSubmit={sendInvite}><div><label>Invite by email</label><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" required /></div><div><label>Permission</label><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as CalendarRole)}><option value="viewer">View only</option><option value="editor">Can edit</option></select></div><button className="primary" disabled={busy}>Invite person</button></form>}
+      {isOwner && <form className="calendar-invite-form" onSubmit={sendInvite}><div><label>Invite by email</label><input type="email" value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} placeholder="person@example.com" required /></div><div><label>Permission</label><select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as CalendarRole)}><option value="viewer">View only</option><option value="editor">Can edit</option></select></div><div className="calendar-invite-message-field"><label>Personal message (optional)</label><textarea value={inviteMessage} onChange={(event) => setInviteMessage(event.target.value)} placeholder="Tell them why you're inviting them" maxLength={1000} rows={3} /></div><button className="primary" disabled={busy}>Send invitation</button></form>}
       <div className="calendar-people-list">
         {isOwner && calendarMembers.map((member) => <div className="calendar-person-row" key={member.id}><div className="member-avatar">{initials(member.member_email)}</div><div><b>{member.member_email || 'Member'}</b><small>Joined {new Date(member.joined_at).toLocaleDateString('en-AU')}</small></div><select value={member.role} onChange={(event) => void updateMemberRole(member.id, event.target.value as CalendarRole)}><option value="viewer">View only</option><option value="editor">Can edit</option></select><button className="danger-ghost" onClick={() => void removeMember(member.id)}>Remove</button></div>)}
         {!isOwner && myMembership && <div className="calendar-person-row"><div className="member-avatar">{initials(myMembership.member_email)}</div><div><b>{myMembership.member_email}</b><small>Your access</small></div><span className="role-chip">{roleLabel(myMembership.role)}</span></div>}
       </div>
-      {isOwner && ownedInvites.length > 0 && <div className="calendar-pending"><h3>Pending invitations</h3>{ownedInvites.map((invite) => <div className="calendar-pending-row" key={invite.id}><div><b>{invite.invitee_email}</b><small>{roleLabel(invite.role)} · expires {new Date(invite.expires_at).toLocaleDateString('en-AU')}</small></div><button onClick={() => void copyInvite(invite)}>Copy link</button><button className="danger-ghost" onClick={() => void cancelInvite(invite.id)}>Cancel</button></div>)}</div>}
+      {isOwner && ownedInvites.length > 0 && <div className="calendar-pending"><h3>Pending invitations</h3>{ownedInvites.map((invite) => <div className="calendar-pending-row" key={invite.id}><div><b>{invite.invitee_email}</b><small>{roleLabel(invite.role)} · expires {new Date(invite.expires_at).toLocaleDateString('en-AU')}</small></div><button onClick={() => void shareInvite(invite)}>Share message &amp; link</button><button className="danger-ghost" onClick={() => void cancelInvite(invite.id)}>Cancel</button></div>)}</div>}
     </div></div>}
 
     {showEvent && activeCalendar && <div className="modal">{!canEdit ? <div className="modal-card"><button type="button" className="x" onClick={() => setShowEvent(false)}>×</button><h2>{eventForm.title}</h2><p>{eventForm.date} · {eventForm.allDay ? "All day" : `${eventForm.startTime}–${eventForm.endTime}`}</p><p>{eventForm.location}</p><p>{eventForm.notes}</p>{eventForm.recurrence !== "none" && <p>Repeats {eventForm.recurrence}</p>}</div> : <form className="modal-card calendar-event-modal" onSubmit={saveEvent}><button type="button" className="x" onClick={() => setShowEvent(false)}>×</button><p className="eyebrow">SHARED EVENT</p><h2>{editingEventId ? 'Edit event' : 'Create event'}</h2>{editingEventId && eventForm.recurrence !== 'none' && <p>Editing or deleting this event changes the whole repeating series.</p>}<label className="field"><span>Title</span><input value={eventForm.title} onChange={(event) => setEventForm((form) => ({ ...form, title: event.target.value }))} required /></label><div className="form-grid"><label className="field"><span>Date</span><input type="date" value={eventForm.date} onChange={(event) => setEventForm((form) => ({ ...form, date: event.target.value }))} /></label><label className="calendar-check"><input type="checkbox" checked={eventForm.allDay} onChange={(event) => setEventForm((form) => ({ ...form, allDay: event.target.checked }))} /><span>All day</span></label>{!eventForm.allDay && <><label className="field"><span>Starts</span><input type="time" value={eventForm.startTime} onChange={(event) => setEventForm((form) => ({ ...form, startTime: event.target.value }))} /></label><label className="field"><span>Ends</span><input type="time" value={eventForm.endTime} onChange={(event) => setEventForm((form) => ({ ...form, endTime: event.target.value }))} /></label></>}</div><label className="field"><span>Repeat</span><select value={eventForm.recurrence} onChange={(event) => setEventForm((form) => ({ ...form, recurrence: event.target.value as RepeatRule }))}>{["none","daily","weekly","monthly","yearly"].map((rule) => <option key={rule} value={rule}>{rule}</option>)}</select></label><label className="field"><span>Location</span><input value={eventForm.location} onChange={(event) => setEventForm((form) => ({ ...form, location: event.target.value }))} placeholder="Optional" /></label><label className="field"><span>Notes</span><textarea rows={4} value={eventForm.notes} onChange={(event) => setEventForm((form) => ({ ...form, notes: event.target.value }))} /></label><div className="calendar-modal-actions">{editingEventId && <button type="button" className="danger-ghost" onClick={() => void deleteEvent()}>Delete event</button>}<button className="primary" disabled={busy}>{busy ? 'Saving…' : 'Save event'}</button></div></form>}</div>}
