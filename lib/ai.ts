@@ -1,4 +1,5 @@
 import type { PlannerTask, PlannerLevel } from '@/lib/types';
+import { getSupabase } from '@/lib/supabase';
 
 export const MODEL_OPTIONS = [
   {
@@ -96,9 +97,18 @@ async function callAssistant(
   history: Array<{ role: 'user' | 'assistant'; content: string }>,
   model: AssistantModelChoice,
 ): Promise<ServerAIResult> {
+  const supabase = getSupabase();
+  const { data: sessionData } = supabase
+    ? await supabase.auth.getSession()
+    : { data: { session: null } };
+  const accessToken = sessionData.session?.access_token;
+
   const response = await fetch('/api/assistant', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
     body: JSON.stringify({
       prompt,
       context,
