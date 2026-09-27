@@ -65,7 +65,7 @@ export function detectPlannerConflicts(
   const now = new Date();
 
   for (const task of active) {
-    const due = validDate(task.dueAt);
+    const due = validDate(task.dueDate);
 
     if (!due) continue;
 
@@ -92,7 +92,7 @@ export function detectPlannerConflicts(
   const byDay = new Map<string, PlannerTask[]>();
 
   for (const task of active) {
-    const due = validDate(task.dueAt);
+    const due = validDate(task.dueDate);
     if (!due) continue;
 
     const key = dayKey(due);
@@ -118,8 +118,8 @@ export function detectPlannerConflicts(
   const timed = active
     .map((task) => ({
       task,
-      start: validDate(task.startAt),
-      end: validDate(task.dueAt),
+      start: validDate(task.startDate),
+      end: validDate(task.dueDate),
     }))
     .filter(
       (
@@ -170,8 +170,8 @@ export function simulateDayOff(
   const affected = tasks.filter((task) => {
     if (task.status === 'done') return false;
 
-    const start = validDate(task.startAt);
-    const due = validDate(task.dueAt);
+    const start = validDate(task.startDate);
+    const due = validDate(task.dueDate);
 
     return (
       (start && dayKey(start) === requestedDate) ||
@@ -181,8 +181,8 @@ export function simulateDayOff(
 
   const moves: ScenarioMove[] = affected.map((task) => {
     const original =
-      validDate(task.startAt) ??
-      validDate(task.dueAt) ??
+      validDate(task.startDate) ??
+      validDate(task.dueDate) ??
       target;
 
     const moved = new Date(nextDay);
@@ -221,8 +221,8 @@ export function buildMorningBrief(
   const today = dayKey(now);
 
   const todaysTasks = tasks.filter((task) => {
-    const start = validDate(task.startAt);
-    const due = validDate(task.dueAt);
+    const start = validDate(task.startDate);
+    const due = validDate(task.dueDate);
 
     return (
       (start && dayKey(start) === today) ||
@@ -231,7 +231,7 @@ export function buildMorningBrief(
   });
 
   const overdueTasks = tasks.filter((task) => {
-    const due = validDate(task.dueAt);
+    const due = validDate(task.dueDate);
     return task.status !== 'done' && Boolean(due && due < now);
   });
 
