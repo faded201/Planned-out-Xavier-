@@ -55,6 +55,17 @@ function addDays(date: Date, amount: number): Date {
   return copy;
 }
 
+function taskDateTime(
+  dateValue?: string | null,
+  timeValue?: string | null,
+  fallbackTime = '00:00',
+): Date | null {
+  if (!dateValue) return null;
+
+  const time = timeValue?.trim() || fallbackTime;
+  return validDate(`${dateValue}T${time}:00`);
+}
+
 export function detectPlannerConflicts(
   tasks: PlannerTask[],
 ): PlannerConflict[] {
@@ -65,7 +76,7 @@ export function detectPlannerConflicts(
   const now = new Date();
 
   for (const task of active) {
-    const due = validDate(task.dueDate);
+    const due = taskDateTime(task.dueDate, task.endTime, '23:59');
 
     if (!due) continue;
 
@@ -92,7 +103,7 @@ export function detectPlannerConflicts(
   const byDay = new Map<string, PlannerTask[]>();
 
   for (const task of active) {
-    const due = validDate(task.dueDate);
+    const due = taskDateTime(task.dueDate, task.endTime, '23:59');
     if (!due) continue;
 
     const key = dayKey(due);
@@ -118,8 +129,8 @@ export function detectPlannerConflicts(
   const timed = active
     .map((task) => ({
       task,
-      start: validDate(task.startDate),
-      end: validDate(task.dueDate),
+      start: taskDateTime(task.startDate, task.startTime, '00:00'),
+      end: taskDateTime(task.dueDate, task.endTime, '23:59'),
     }))
     .filter(
       (
@@ -170,8 +181,8 @@ export function simulateDayOff(
   const affected = tasks.filter((task) => {
     if (task.status === 'done') return false;
 
-    const start = validDate(task.startDate);
-    const due = validDate(task.dueDate);
+    const start = taskDateTime(task.startDate, task.startTime, '00:00');
+    const due = taskDateTime(task.dueDate, task.endTime, '23:59');
 
     return (
       (start && dayKey(start) === requestedDate) ||
@@ -181,8 +192,8 @@ export function simulateDayOff(
 
   const moves: ScenarioMove[] = affected.map((task) => {
     const original =
-      validDate(task.startDate) ??
-      validDate(task.dueDate) ??
+      taskDateTime(task.startDate, task.startTime, '00:00') ??
+      taskDateTime(task.dueDate, task.endTime, '23:59') ??
       target;
 
     const moved = new Date(nextDay);
@@ -221,8 +232,8 @@ export function buildMorningBrief(
   const today = dayKey(now);
 
   const todaysTasks = tasks.filter((task) => {
-    const start = validDate(task.startDate);
-    const due = validDate(task.dueDate);
+    const start = taskDateTime(task.startDate, task.startTime, '00:00');
+    const due = taskDateTime(task.dueDate, task.endTime, '23:59');
 
     return (
       (start && dayKey(start) === today) ||
@@ -231,7 +242,7 @@ export function buildMorningBrief(
   });
 
   const overdueTasks = tasks.filter((task) => {
-    const due = validDate(task.dueDate);
+    const due = taskDateTime(task.dueDate, task.endTime, '23:59');
     return task.status !== 'done' && Boolean(due && due < now);
   });
 
