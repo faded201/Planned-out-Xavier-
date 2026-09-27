@@ -9,6 +9,18 @@ import { AssistantPanel, type AssistantContext } from '@/components/assistant-pa
 import { CollaborativeCalendar } from '@/components/collaborative-calendar';
 import { CalendarConnectionsSettings } from '@/components/calendar-connections-settings';
 import { disablePushNotifications, enablePushNotifications, registerPushWorker } from '@/lib/push';
+import {
+  buildMorningBrief,
+  detectPlannerConflicts,
+} from '@/lib/planner-intelligence';
+import {
+  approvePlannerAction,
+  applyPlannerAction,
+  proposePlannerAction,
+  rejectPlannerAction,
+  undoPlannerAction,
+  type PlannerAction,
+} from '@/lib/planner-actions';
 import { plannerLevels, type AppState, type AppView, type ModuleName, type ModuleRecord, type PlannerFile, type PlannerLevel, type PlannerTask, type Priority, type Status, type VisualPreset } from '@/lib/types';
 
 const LEGACY_STORAGE_KEY = 'xavier-planner-os-ultimate-v2';
@@ -185,6 +197,7 @@ export function UltimatePlanner() {
   const [pushPermission, setPushPermission] = useState<string>('default');
   const [selectedModule, setSelectedModule] = useState<ModuleName>('knowledge');
   const [memory, setMemory] = useState<string[]>([]);
+  const [plannerActions, setPlannerActions] = useState<PlannerAction[]>([]);
   const fileInput = useRef<HTMLInputElement | null>(null);
   const backupInput = useRef<HTMLInputElement | null>(null);
   const authRequestInFlight = useRef(false);
@@ -254,6 +267,22 @@ export function UltimatePlanner() {
   }, []);
 
   const selectedTask = state.tasks.find((task) => task.id === selectedTaskId) || null;
+  const plannerConflicts = useMemo(
+    () => detectPlannerConflicts(state.tasks),
+    [state.tasks],
+  );
+  const morningBrief = useMemo(
+    () => buildMorningBrief(state.tasks),
+    [state.tasks],
+  );
+  const pendingPlannerActions = useMemo(
+    () => plannerActions.filter((action) => action.status === 'proposed'),
+    [plannerActions],
+  );
+  const undoablePlannerActions = useMemo(
+    () => plannerActions.filter((action) => action.status === 'applied'),
+    [plannerActions],
+  );
   const filteredTasks = useMemo(() => state.tasks.filter((task) => [task.title, task.notes, task.level, task.area, ...task.tags].join(' ').toLowerCase().includes(query.toLowerCase())), [state.tasks, query]);
   const overdue = state.tasks.filter((task) => task.status !== 'done' && task.dueDate < todayKey()).length;
   const activeFiles = state.files.filter((file) => !selectedTask || file.taskId === selectedTask.id);
@@ -709,14 +738,126 @@ export function UltimatePlanner() {
 
   function assistantCreateTask(input: { title: string; notes?: string; level?: PlannerLevel; priority?: Priority; area?: string; dueDate?: string }) {
     const task = blankTask(input.level || 'daily');
-    task.title = input.title;
+    task.title = input.title.trim();
+    if (!task.title) return;
+
     if (input.notes) task.notes = input.notes;
     if (input.priority) task.priority = input.priority;
     if (input.area) task.area = input.area;
-    if (input.dueDate) { task.dueDate = input.dueDate; task.startDate = input.dueDate; }
-    mutate((current) => ({ ...current, tasks: [task, ...current.tasks] }));
-    if (user) void saveTaskToCloud(task);
-    alert(`Qwen created task "${task.title}".`);
+
+    if (input.dueDate) {
+      task.dueDate = input.dueDate;
+      task.startDate = input.dueDate;
+    }
+
+    const action = proposePlannerAction({
+      type: 'create-task',
+      title: `Create task: ${task.title}`,
+      description: 'Proposed by the Planned Out AI assistant.',
+      payload: { task },
+    });
+
+    setPlannerActions((current) => [action, ...current]);
+    setView('dashboard');
+    alert(`AI proposed "${task.title}". Review it in Command before applying.`);
+  }
+
+  async function approveAction(action: PlannerAction) {
+    try {
+      const approved = approvePlannerAction(action);
+      const result = applyPlannerAction(state.tasks, approved);
+
+      if (result.action.type === 'create-task') {
+        const task = result.action.payload.task as PlannerTask | undefined;
+
+        if (!task) throw new Error('Approved task payload is missing.');
+
+        if (user) {
+          const saved = await saveTaskToCloud(task);
+          if (!saved) throw new Error('Cloud sync failed. The action was not applied.');
+        }
+      }
+
+      setState((current) => ({
+        ...current,
+        tasks: result.tasks,
+      }));
+
+      setPlannerActions((current) =>
+        current.map((item) =>
+          item.id === action.id ? result.action : item,
+        ),
+      );
+
+      alert(`Applied: ${result.action.title}`);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Could not apply the proposed action.',
+      );
+    }
+  }
+
+  function rejectAction(action: PlannerAction) {
+    try {
+      const rejected = rejectPlannerAction(action);
+
+      setPlannerActions((current) =>
+        current.map((item) =>
+          item.id === action.id ? rejected : item,
+        ),
+      );
+
+      alert(`Rejected: ${action.title}`);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Could not reject the proposed action.',
+      );
+    }
+  }
+
+  async function undoAction(action: PlannerAction) {
+    try {
+      const result = undoPlannerAction(state.tasks, action);
+
+      if (action.type === 'create-task') {
+        const taskId = action.inversePayload?.taskId as string | undefined;
+
+        if (!taskId) throw new Error('Undo information is missing.');
+
+        if (sb && user) {
+          const { error } = await sb
+            .from('planner_tasks')
+            .delete()
+            .eq('id', taskId)
+            .eq('user_id', user.id);
+
+          if (error) throw new Error(error.message);
+        }
+      }
+
+      setState((current) => ({
+        ...current,
+        tasks: result.tasks,
+      }));
+
+      setPlannerActions((current) =>
+        current.map((item) =>
+          item.id === action.id ? result.action : item,
+        ),
+      );
+
+      alert(`Undone: ${action.title}`);
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Could not undo the action.',
+      );
+    }
   }
 
   function assistantCreateRecord(module: ModuleName, title: string, body?: string) {
@@ -754,7 +895,21 @@ export function UltimatePlanner() {
     <main className="main">
       <header className="topbar"><button className="menu" onClick={() => setMobileOpen(true)}>☰</button><div><span className="eyebrow">WORLD-CLASS PLANNER</span><h1>{views.find((item) => item.id === view)?.label || 'Command'}</h1></div><div className="search"><span>⌕</span><input placeholder="Search tasks, files, notes, finance, health…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><button className="primary" onClick={() => openTask('daily')}>Create</button></header>
       {notice && <div className="notice">{notice}</div>}
-      {view === 'dashboard' && <Dashboard tasks={state.tasks} files={state.files} records={state.records} overdue={overdue} onOpenTask={setSelectedTaskId} onInstallTemplate={installTemplate} />}
+      {view === 'dashboard' && <Dashboard
+        tasks={state.tasks}
+        files={state.files}
+        records={state.records}
+        overdue={overdue}
+        morningBrief={morningBrief}
+        conflicts={plannerConflicts}
+        pendingActions={pendingPlannerActions}
+        undoableActions={undoablePlannerActions}
+        onApproveAction={(action) => void approveAction(action)}
+        onRejectAction={rejectAction}
+        onUndoAction={(action) => void undoAction(action)}
+        onOpenTask={setSelectedTaskId}
+        onInstallTemplate={installTemplate}
+      />}
       {view === 'planner' && <PlannerView tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTaskId} onNew={openTask} onEdit={editTask} onToggle={toggleTask} onDelete={deleteTask} />}
       {view === 'calendar' && <CollaborativeCalendar user={user} tasks={filteredTasks} onSelectTask={setSelectedTaskId} onCreateTask={() => openTask('daily')} onRequestSignIn={() => setShowAuth(true)} />}
       {view === 'board' && <BoardView tasks={filteredTasks} onSelect={setSelectedTaskId} onMove={toggleTask} />}
@@ -783,7 +938,34 @@ export function UltimatePlanner() {
   </div>;
 }
 
-function Dashboard({ tasks, files, records, overdue, onOpenTask, onInstallTemplate }: { tasks: PlannerTask[]; files: PlannerFile[]; records: ModuleRecord[]; overdue: number; onOpenTask: (id: string) => void; onInstallTemplate: (name: string) => void }) {
+function Dashboard({
+  tasks, files, records, overdue,
+  morningBrief, conflicts, pendingActions, undoableActions,
+  onApproveAction, onRejectAction, onUndoAction,
+  onOpenTask, onInstallTemplate
+}: {
+  tasks: PlannerTask[];
+  files: PlannerFile[];
+  records: ModuleRecord[];
+  overdue: number;
+  morningBrief: ReturnType<typeof buildMorningBrief>;
+  conflicts: ReturnType<typeof detectPlannerConflicts>;
+  pendingActions: PlannerAction[];
+  undoableActions: PlannerAction[];
+  onApproveAction: (action: PlannerAction) => void;
+  onRejectAction: (action: PlannerAction) => void;
+  onUndoAction: (action: PlannerAction) => void;
+  onOpenTask: (id: string) => void;
+  onInstallTemplate: (name: string) => void;
+}) {
+  void morningBrief;
+  void conflicts;
+  void pendingActions;
+  void undoableActions;
+  void onApproveAction;
+  void onRejectAction;
+  void onUndoAction;
+
   const active = tasks.filter((task) => task.status === 'active');
   const pending = tasks
     .filter((task) => task.status !== 'done')
