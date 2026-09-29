@@ -8,6 +8,7 @@ import { instantBreakdown, qwenOrLlamaBreakdown } from '@/lib/ai';
 import { AssistantPanel, type AssistantContext } from '@/components/assistant-panel';
 import { CollaborativeCalendar } from '@/components/collaborative-calendar';
 import { CalendarConnectionsSettings } from '@/components/calendar-connections-settings';
+import { MembershipAdmin } from '@/components/membership-admin';
 import { disablePushNotifications, enablePushNotifications, registerPushWorker } from '@/lib/push';
 import {
   buildMorningBrief,
@@ -1013,6 +1014,7 @@ function SettingsView({ state, setState, user, busy, pushPermission, onEnablePus
     <Panel title="Technology layouts"><div className="preset-grid">{visualPresetOptions.map((preset, index) => <button className={`preset-option ${state.visualPreset === preset.id ? 'chosen' : ''}`} key={preset.id} onClick={() => setState((s) => ({ ...s, visualPreset: preset.id }))}><span className="preset-number">{String(index + 1).padStart(2, '0')}</span><b>{preset.name}</b><small>{preset.description}</small></button>)}</div></Panel>
     <Panel title="Push alerts"><p className="reminder-help">Background reminders use your signed-in Supabase account and this device's browser push subscription. If you are signed out, the first button opens sign-in instead of doing nothing.</p><span className={`push-status ${pushPermission}`}><i />{!user ? 'Account required for scheduled background alerts' : `Browser permission: ${pushPermission}`}</span><div className="push-actions"><button className={pushPermission === 'granted' ? 'chosen' : ''} disabled={busy} onClick={onEnablePush}>{user ? (pushPermission === 'granted' ? 'Re-enable push alerts' : 'Enable push alerts') : 'Sign in & enable push'}</button><button disabled={busy || pushPermission !== 'granted'} onClick={onTestPush}>Send test alert</button><button disabled={busy || !user} onClick={onDisablePush}>Remove device alerts</button></div></Panel>
     <Panel title="Calendar connections"><CalendarConnectionsSettings user={user} onRequestSignIn={onRequestSignIn} /></Panel>
+    <Panel title="Membership administration"><MembershipAdmin user={user} /></Panel>
     <Panel title="Themes"><div className="choices">{['midnight','glass','aurora','executive','amoled','nature'].map((theme) => <button className={state.theme === theme ? 'chosen' : ''} key={theme} onClick={() => setState((s) => ({ ...s, theme }))}>{theme}</button>)}</div></Panel>
     <Panel title="Density"><div className="choices"><button className={state.density === 'comfortable' ? 'chosen' : ''} onClick={() => setState((s) => ({ ...s, density: 'comfortable' }))}>Comfortable</button><button className={state.density === 'compact' ? 'chosen' : ''} onClick={() => setState((s) => ({ ...s, density: 'compact' }))}>Compact</button></div></Panel>
     <Panel title="Backup"><button onClick={onExport}>Export JSON backup</button><button onClick={onImport}>Import backup</button></Panel>

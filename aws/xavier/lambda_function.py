@@ -1,6 +1,7 @@
 import json
 import boto3
 import os
+import re
 from datetime import datetime, timezone, timedelta
 from boto3.dynamodb.conditions import Attr
 from botocore.config import Config
@@ -26,6 +27,7 @@ PLAN_LIMITS = {
 }
 
 BURST_LIMIT = int(os.environ.get("BURST_LIMIT", "20"))
+OWNER_USER_ID = os.environ.get("OWNER_USER_ID", "06b5e7ce-9624-4afb-b2e9-24fc095038d5")
 
 usage_table = dynamodb.Table(USAGE_TABLE)
 entitlements_table = dynamodb.Table(ENTITLEMENTS_TABLE)
@@ -72,6 +74,9 @@ def get_entitlement(user_id):
 
     item = result.get("Item")
 
+    if user_id == OWNER_USER_ID:
+        return {"plan": "business", "status": "owner", "expires_at": None}
+
     # Missing record = Free.
     if not item:
         return {
@@ -95,6 +100,10 @@ def get_entitlement(user_id):
             "status": "fallback",
             "expires_at": None
         }
+
+    # Permanent owner-issued grants do not expire.
+    if plan != "free" and item.get("permanent") is True:
+        return {"plan": plan, "status": status, "expires_at": None}
 
     # Paid plans require a valid future expiry.
     if plan != "free":
@@ -150,6 +159,34 @@ def record_outcome(user_id, period, succeeded):
     )
 
 
+def handle_admin_membership(event, actor_id):
+    if actor_id != OWNER_USER_ID:
+        return api_response(403, {"error": "Owner access required"})
+    body = event.get("body", {})
+    if isinstance(body, str):
+        body = json.loads(body)
+    if not isinstance(body, dict):
+        return api_response(400, {"error": "Invalid request"})
+    target = str(body.get("userId", ""))
+    plan = str(body.get("plan", "")).lower()
+    permanent = body.get("permanent") is True
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", target) or plan not in PLAN_LIMITS:
+        return api_response(400, {"error": "Valid userId and plan are required"})
+    expires_at = None
+    if plan != "free" and not permanent:
+        expiry = parse_expiry(body.get("expiresAt"))
+        if expiry is None or expiry <= datetime.now(timezone.utc):
+            return api_response(400, {"error": "Future expiry required"})
+        expires_at = expiry.isoformat()
+    item = {"user_id": target, "plan": plan, "status": "active" if plan != "free" else "free",
+            "permanent": permanent, "updated_by": actor_id, "updated_at": datetime.now(timezone.utc).isoformat()}
+    if expires_at:
+        item["expires_at"] = expires_at
+    entitlements_table.put_item(Item=item)
+    return api_response(200, {"updated": True, "userId": target, "plan": plan,
+                              "permanent": permanent, "expiresAt": expires_at})
+
+
 def lambda_handler(event, context):
     admitted_period = None
     inference_succeeded = False
@@ -158,6 +195,9 @@ def lambda_handler(event, context):
 
         if not user_id:
             return api_response(401, {"error": "Unauthorized"})
+
+        if event.get("rawPath") == "/admin/memberships":
+            return handle_admin_membership(event, user_id)
 
         body = event.get("body", event)
 
