@@ -3,6 +3,8 @@ import boto3
 import os
 import re
 import uuid
+import urllib.error
+import urllib.request
 from datetime import datetime, timezone, timedelta
 from boto3.dynamodb.conditions import Attr
 from botocore.config import Config
@@ -34,6 +36,8 @@ OWNER_USER_ID = os.environ.get("OWNER_USER_ID", "06b5e7ce-9624-4afb-b2e9-24fc095
 ENTITLEMENTS_WRITER_FUNCTION = os.environ.get(
     "ENTITLEMENTS_WRITER_FUNCTION", "PlannedOut-Entitlements-Writer"
 )
+SUPABASE_URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
+SUPABASE_PUBLISHABLE_KEY = os.environ.get("SUPABASE_PUBLISHABLE_KEY", "")
 
 usage_table = dynamodb.Table(USAGE_TABLE)
 entitlements_table = dynamodb.Table(ENTITLEMENTS_TABLE)
@@ -51,11 +55,41 @@ def api_response(status, payload):
 
 
 def authenticated_user(event):
+    # Preserve compatibility with API Gateway JWT claims when present.
     try:
         claims = event["requestContext"]["authorizer"]["jwt"]["claims"]
         subject = claims.get("sub")
-        return str(subject) if subject else None
+        if subject:
+            return str(subject)
     except (KeyError, TypeError, AttributeError):
+        pass
+
+    # Supabase currently signs this project's access tokens with ES256.
+    # API Gateway HTTP JWT authorizers only accept RSA algorithms, so
+    # validate the bearer token with Supabase Auth before trusting its user id.
+    headers = event.get("headers") or {}
+    authorization = headers.get("authorization") or headers.get("Authorization") or ""
+    match = re.match(r"^Bearer\s+([^\s]+)$", str(authorization), re.IGNORECASE)
+    if not match or not SUPABASE_URL or not SUPABASE_PUBLISHABLE_KEY:
+        return None
+
+    request = urllib.request.Request(
+        SUPABASE_URL + "/auth/v1/user",
+        method="GET",
+        headers={
+            "Authorization": "Bearer " + match.group(1),
+            "apikey": SUPABASE_PUBLISHABLE_KEY,
+            "Accept": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=4) as response:
+            if response.status != 200:
+                return None
+            payload = json.loads(response.read().decode("utf-8"))
+            subject = payload.get("id")
+            return str(uuid.UUID(str(subject))) if subject else None
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, ValueError, TypeError, json.JSONDecodeError):
         return None
 
 
