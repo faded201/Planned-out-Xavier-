@@ -142,3 +142,19 @@
   .preset-signal-stack .topbar{top:0}
   .preset-grid{grid-template-columns:1fr}
 }
+
+/* Xavier AI voice reliability controls */
+.assistant-head-copy{flex:1;min-width:0;display:grid;gap:5px}
+.assistant-head-copy select{width:100%;margin-top:6px;padding:8px 10px;border-radius:11px;border:1px solid var(--line);background:var(--card2);color:var(--text);font-size:12px}
+.assistant-head-actions{display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.assistant-voice-toggle,.assistant-talk,.assistant-replay{border:1px solid var(--line);background:var(--card2);color:var(--text);border-radius:11px;transition:transform .18s ease,border-color .18s ease,background .18s ease,box-shadow .18s ease}
+.assistant-voice-toggle{padding:8px 10px;font-size:11px;white-space:nowrap}
+.assistant-voice-toggle.active{border-color:color-mix(in srgb,var(--accent) 42%,var(--line));background:color-mix(in srgb,var(--accent) 8%,var(--card2));box-shadow:0 0 24px color-mix(in srgb,var(--accent) 10%,transparent)}
+.assistant-talk{min-width:104px}.assistant-talk.active{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--card2));box-shadow:0 0 22px color-mix(in srgb,var(--accent) 14%,transparent);animation:xavierListenPulse 1.25s ease-in-out infinite}
+.assistant-replay{display:block;margin-top:8px;padding:6px 8px;font-size:10px;opacity:.82;width:max-content;max-width:100%}
+.assistant-replay:hover,.assistant-voice-toggle:hover,.assistant-talk:hover{transform:translateY(-1px);border-color:color-mix(in srgb,var(--accent) 45%,var(--line))}
+.assistant-phase-label{display:block;margin-top:7px;text-align:center;font-size:8px;font-weight:900;letter-spacing:.18em;color:var(--muted)}
+.assistant-model-label{opacity:.72;font-size:10px;font-weight:800;letter-spacing:.04em}
+.assistant-voice-error{margin:0 14px 12px;padding:9px 11px;border:1px solid color-mix(in srgb,#ff7b7b 35%,var(--line));border-radius:10px;background:color-mix(in srgb,#ff7b7b 7%,var(--card));font-size:11px;line-height:1.45}
+@keyframes xavierListenPulse{50%{box-shadow:0 0 34px color-mix(in srgb,var(--accent) 25%,transparent)}}
+@media(max-width:700px){.assistant-head{align-items:flex-start}.assistant-head-actions{width:100%;justify-content:space-between}.assistant-voice-toggle{flex:1}.assistant-input{grid-template-columns:minmax(0,1fr) auto!important}.assistant-input .assistant-talk{grid-column:1/-1;width:100%}}

@@ -2,7 +2,7 @@ import type { PlannerTask, PlannerLevel } from '@/lib/types';
 import { getSupabase } from '@/lib/supabase';
 
 export const MODEL_OPTIONS = [
-  { id: 'auto', label: 'Xavier · Nova Lite', detail: 'Secure cloud assistance with your Free, Pro or Business allowance.' },
+  { id: 'auto', label: 'Xavier Ã‚Â· Nova Lite', detail: 'Secure cloud assistance with your Free, Pro or Business allowance.' },
 ] as const;
 
 export type AssistantModelChoice = (typeof MODEL_OPTIONS)[number]['id'];
@@ -74,26 +74,55 @@ async function callAssistant(
   model: AssistantModelChoice,
 ): Promise<ServerAIResult> {
   const supabase = getSupabase();
-  const { data: sessionData } = supabase
-    ? await supabase.auth.getSession()
-    : { data: { session: null } };
-  const accessToken = sessionData.session?.access_token;
-  if (!accessToken) throw new Error('Sign in to Planned Out to use Xavier.');
+  if (!supabase) throw new Error('Sign in to Planned Out to use Xavier.');
+  const client = supabase;
 
-  const response = await fetch('/api/assistant', {
+  async function getAccessToken(forceRefresh = false) {
+    if (forceRefresh) {
+      const refreshed = await client.auth.refreshSession();
+      return refreshed.data.session?.access_token || null;
+    }
+
+    const { data } = await client.auth.getSession();
+    const session = data.session;
+    if (!session) return null;
+
+    const expiresAtMs = Number(session.expires_at || 0) * 1000;
+    if (expiresAtMs && expiresAtMs <= Date.now() + 120_000) {
+      const refreshed = await client.auth.refreshSession();
+      return refreshed.data.session?.access_token || null;
+    }
+
+    return session.access_token;
+  }
+
+  let accessToken = await getAccessToken();
+  if (!accessToken) throw new Error('Your Planned Out session has expired. Sign in again.');
+
+  const payload = JSON.stringify({
+    prompt,
+    context,
+    history: history.slice(-10),
+    model,
+  });
+
+  const makeRequest = (token: string) => fetch('/api/assistant', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
     },
     signal: AbortSignal.timeout(45_000),
-    body: JSON.stringify({
-      prompt,
-      context,
-      history: history.slice(-10),
-      model,
-    }),
+    cache: 'no-store',
+    body: payload,
   });
+
+  let response = await makeRequest(accessToken);
+  if (response.status === 401) {
+    accessToken = await getAccessToken(true);
+    if (!accessToken) throw new Error('Your Planned Out session has expired. Sign in again.');
+    response = await makeRequest(accessToken);
+  }
 
   const data = (await response.json().catch(() => ({}))) as ServerAIResponse;
 
@@ -121,12 +150,12 @@ export async function serverAIChat(
   model: AssistantModelChoice,
   onProgress: (message: string) => void,
 ): Promise<ServerAIResult> {
-  onProgress('Connecting to Xavier…');
+  onProgress('Connecting to XavierÃ¢â‚¬Â¦');
 
   const result = await callAssistant(prompt, context, history, model);
 
   onProgress(
-    result.model ? `Using ${result.model}…` : 'Xavier connected…',
+    result.model ? `Using ${result.model}Ã¢â‚¬Â¦` : 'Xavier connectedÃ¢â‚¬Â¦',
   );
 
   return result;
@@ -184,7 +213,7 @@ export async function qwenOrLlamaBreakdown(
   childLevel: PlannerLevel,
   onProgress: (message: string) => void,
 ): Promise<PlannerTask[]> {
-  onProgress('Planning with Xavier…');
+  onProgress('Planning with XavierÃ¢â‚¬Â¦');
 
   const prompt = [
     'Break this goal into practical child steps.',
@@ -209,7 +238,7 @@ export async function qwenOrLlamaBreakdown(
     const result = await callAssistant(prompt, {}, [], 'auto');
 
     onProgress(
-      result.model ? `Using ${result.model}…` : 'Building plan…',
+      result.model ? `Using ${result.model}Ã¢â‚¬Â¦` : 'Building planÃ¢â‚¬Â¦',
     );
 
     const steps = parseBreakdown(result.text);
@@ -240,7 +269,7 @@ export async function qwenOrLlamaBreakdown(
       updatedAt: new Date().toISOString(),
     }));
   } catch {
-    onProgress('Xavier unavailable — using instant smart templates…');
+    onProgress('Xavier unavailable Ã¢â‚¬â€ using instant smart templatesÃ¢â‚¬Â¦');
     return instantBreakdown(parent, childLevel);
   }
 }
