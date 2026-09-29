@@ -106,10 +106,22 @@ def verify_signature(payload, header):
         signed,
         hashlib.sha256,
     ).hexdigest()
-    return any(
+    matched = any(
         hmac.compare_digest(expected, candidate)
         for candidate in parts.get("v1", [])
     )
+    print(
+        "Stripe signature diagnostic:",
+        json.dumps({
+            "payload_len": len(payload),
+            "payload_sha16": hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16],
+            "timestamp": timestamp,
+            "age_seconds": abs(int(time.time()) - timestamp),
+            "v1_count": len(parts.get("v1", [])),
+            "matched": matched,
+        }),
+    )
+    return matched
 
 
 def iso_from_epoch(value):

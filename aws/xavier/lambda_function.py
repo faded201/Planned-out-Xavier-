@@ -182,6 +182,11 @@ def handle_admin_membership(event, actor_id):
         return api_response(400, {"error": "Valid userId and plan are required"})
     if plan not in PLAN_LIMITS:
         return api_response(400, {"error": "Valid userId and plan are required"})
+    if target == OWNER_USER_ID and (plan != "business" or not permanent):
+        return api_response(
+            400,
+            {"error": "Owner account is permanently locked to Business / Full"}
+        )
     expires_at = None
     if plan != "free" and not permanent:
         expiry = parse_expiry(body.get("expiresAt"))
@@ -214,8 +219,15 @@ def handle_admin_membership(event, actor_id):
         writer_body = {"error": "Invalid writer response"}
     if writer_status >= 400:
         return api_response(502, {"error": "Membership update failed"})
-    return api_response(200, {"updated": writer_body.get("updated", False), "userId": target, "plan": plan,
-                              "permanent": permanent, "expiresAt": expires_at})
+    action = "revoked" if plan == "free" else "changed"
+    return api_response(200, {
+        "updated": writer_body.get("updated", False),
+        "userId": target,
+        "plan": plan,
+        "permanent": permanent,
+        "expiresAt": expires_at,
+        "action": action
+    })
 
 
 def lambda_handler(event, context):
