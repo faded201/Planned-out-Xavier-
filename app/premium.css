@@ -29,3 +29,11 @@
 @keyframes uiListen{50%{box-shadow:0 0 22px color-mix(in srgb,var(--accent) 24%,transparent)}}@keyframes uiWork{50%{transform:translateY(-2px)}}
 @media(max-width:700px){.living-grid{grid-template-columns:1fr}.assistant-orb-dock{right:12px;bottom:14px}.xavier-orb.premium{width:84px;height:84px}}
 @media(prefers-reduced-motion:reduce){.premium-ui *,.xavier-orb *{animation-duration:.001ms!important;animation-iteration-count:1!important}}
+.billing-settings{display:grid;gap:16px}.billing-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
+.billing-head p,.billing-plan p,.billing-footnote{opacity:.72;line-height:1.45}.billing-toggle{display:flex;gap:8px;flex-wrap:wrap}
+.billing-plans{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.billing-plan{border:1px solid color-mix(in srgb,var(--accent) 22%,transparent);border-radius:16px;padding:16px;display:grid;gap:10px;background:color-mix(in srgb,var(--panel) 88%,transparent)}
+.billing-price{font-size:1.5rem}.billing-price small{font-size:.78rem;font-weight:600;opacity:.65}
+.billing-note{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent)}
+.billing-footnote{font-size:.82rem;margin:0}
+@media(max-width:700px){.billing-head{display:grid}.billing-plans{grid-template-columns:1fr}}
