@@ -37,3 +37,30 @@
 .billing-note{padding:10px 12px;border-radius:12px;background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid color-mix(in srgb,var(--accent) 22%,transparent)}
 .billing-footnote{font-size:.82rem;margin:0}
 @media(max-width:700px){.billing-head{display:grid}.billing-plans{grid-template-columns:1fr}}
+
+/* Silver alien intelligence: scalable vector shell and compositor-only motion. */
+.xavier-orb.alien-tech{width:154px;height:174px;padding:0;color:#e8edf2;isolation:isolate;display:block;flex-shrink:0;background:transparent;border:0;border-radius:50%;cursor:default}
+button.xavier-orb.alien-tech{cursor:pointer;touch-action:manipulation}
+button.xavier-orb.alien-tech:focus-visible{outline:2px solid #eaf6ff;outline-offset:5px}
+.alien-sphere{position:absolute;inset:13% 13% 23%;display:block;filter:drop-shadow(0 12px 13px #0009);animation:alienFloat 6s ease-in-out infinite}
+.alien-sphere svg{display:block;width:100%;height:100%;overflow:visible}
+.alien-aura{position:absolute;inset:10% 4% 15%;border-radius:50%;background:radial-gradient(ellipse,#dceeff30,transparent 67%);animation:alienBreathe 4s ease-in-out infinite;pointer-events:none}
+.alien-ring{position:absolute;left:2%;top:26%;width:96%;height:40%;border:1px solid #dce6ef9c;border-bottom:2px solid #fff;border-radius:50%;box-shadow:0 1px 5px #eaf7ff50,inset 0 -1px 3px #fff4;pointer-events:none}
+.alien-ring-one{transform:rotate(-28deg);animation:alienOrbit 14s linear infinite;z-index:2}
+.alien-ring-two{transform:rotate(58deg);animation:alienOrbit 19s linear infinite reverse;opacity:.6}
+.alien-caption{position:absolute;bottom:0;left:0;right:0;text-align:center;text-shadow:0 2px 5px #000,0 0 8px #000;line-height:1.5;pointer-events:none}
+.alien-caption strong{display:block;font-size:11px;letter-spacing:.3em;color:#f5f7fa}
+.alien-caption small{display:block;font-size:9px;letter-spacing:.04em;color:#d0dae3;text-transform:capitalize}
+.xavier-orb-stage{display:grid;place-items:center;padding:6px 0 18px;background:radial-gradient(ellipse at center,#cbd9e315,transparent 70%)}
+.xavier-orb.alien-tech.orb-large{width:240px;height:260px;max-width:100%}
+.orb-large .alien-caption strong{font-size:16px;letter-spacing:.4em}.orb-large .alien-caption small{font-size:11px}
+.alien-tech.phase-listening .alien-aura,.alien-tech.phase-speaking .alien-aura{animation-duration:.8s}
+.alien-tech.phase-planning .alien-ring,.alien-tech.phase-understanding .alien-ring{animation-duration:3s}
+.alien-tech.phase-executing .alien-ring{animation-duration:1.8s}
+.alien-tech.phase-speaking .alien-eye,.alien-tech.phase-completed .alien-eye{animation:alienBreathe .8s ease-in-out infinite}
+.assistant-orb-dock.orb-dock-open{display:none}
+@keyframes alienFloat{50%{transform:translateY(-5px)}}
+@keyframes alienBreathe{50%{opacity:.5}}
+@keyframes alienOrbit{to{transform:rotate(332deg)}}
+@media(max-width:700px){.xavier-orb.alien-tech{width:126px;height:146px}.assistant-orb-dock{right:12px;bottom:calc(14px + env(safe-area-inset-bottom,0px))}.xavier-orb.alien-tech.orb-large{width:220px;height:240px}}
+@media(prefers-reduced-motion:reduce){.alien-tech *{animation:none!important}}

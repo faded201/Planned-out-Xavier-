@@ -265,7 +265,7 @@ export function AssistantPanel({ actions, premium = false, onPhaseChange }: { ac
 
   return (
     <>
-      <div className="assistant-orb-dock">
+      <div className={`assistant-orb-dock ${open ? 'orb-dock-open' : ''}`}>
         <XavierOrb phase={phase} premium={premium} onActivate={() => setOpen((value) => !value)} />
       </div>
 
@@ -326,6 +326,7 @@ export function AssistantPanel({ actions, premium = false, onPhaseChange }: { ac
           </header>
 
           <div className="assistant-log">
+            <div className="xavier-orb-stage"><XavierOrb phase={phase} premium={premium} large /></div>
             {messages.length === 0 && (
               <div className="assistant-empty">
                 <p>

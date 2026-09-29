@@ -92,6 +92,7 @@ export function BillingSettings({ user, plan }: { user: User | null; plan: Plan 
     <div className="billing-plans">
       {selected.map((item) => {
         const current = plan === item.plan;
+        const alreadyPaid = plan !== 'free';
         return <article className="billing-plan" key={`${item.plan}-${item.interval}`}>
           <span className="eyebrow">{item.plan === 'business' ? 'FULL ACCESS' : 'PREMIUM'}</span>
           <h3>{item.plan === 'business' ? 'Business / Full' : 'Pro'}</h3>
@@ -101,10 +102,10 @@ export function BillingSettings({ user, plan }: { user: User | null; plan: Plan 
             : 'Premium Xavier orb, 10 living calendars and expanded AI allowance.'}</p>
           <button
             className="primary"
-            disabled={Boolean(busy) || current || !item.available || !billingReady}
+            disabled={Boolean(busy) || alreadyPaid || !item.available || !billingReady}
             onClick={() => void post('/api/billing/checkout', { plan: item.plan, interval: item.interval })}
           >
-            {current ? 'Current plan' : item.available ? `Choose ${item.plan === 'business' ? 'Business' : 'Pro'}` : 'Not configured'}
+            {current ? 'Current plan' : alreadyPaid ? 'Use Manage billing to change' : item.available ? `Choose ${item.plan === 'business' ? 'Business' : 'Pro'}` : 'Not configured'}
           </button>
         </article>;
       })}

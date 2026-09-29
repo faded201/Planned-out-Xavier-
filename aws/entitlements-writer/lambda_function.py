@@ -143,9 +143,12 @@ def lambda_handler(event, context):
             values[":updated_by"] = updated_by
             updates.append("updated_by = :updated_by")
 
+        removes = []
         if expires_at:
             values[":expires_at"] = expires_at
             updates.append("expires_at = :expires_at")
+        elif plan == "free" or permanent or status not in {"active", "trialing"}:
+            removes.append("expires_at")
 
         if stripe_customer_id:
             values[":customer"] = stripe_customer_id
@@ -157,16 +160,22 @@ def lambda_handler(event, context):
                 "stripe_subscription_id = :subscription"
             )
 
-        # Prevent duplicate/older events from replacing newer state.
+        # Prevent exact duplicates and older events from replacing newer state.
+        # Stripe timestamps have one-second resolution, so different events
+        # created in the same second are accepted in arrival order.
+        update_expression = "SET " + ", ".join(updates)
+        if removes:
+            update_expression += " REMOVE " + ", ".join(removes)
+
         table.update_item(
             Key={"user_id": user_id},
-            UpdateExpression="SET " + ", ".join(updates),
+            UpdateExpression=update_expression,
             ConditionExpression=(
                 "(attribute_not_exists(last_event_id) "
                 "OR last_event_id <> :event_id) "
                 "AND "
                 "(attribute_not_exists(last_event_created) "
-                "OR last_event_created < :event_created)"
+                "OR last_event_created <= :event_created)"
             ),
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values

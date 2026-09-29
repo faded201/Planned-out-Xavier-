@@ -1,12 +1,5 @@
 import { requireBillingUser } from '@/lib/server/billing-auth';
-import {
-  findOrCreateCustomer,
-  getAppUrl,
-  getPriceId,
-  getStripe,
-  type BillingInterval,
-  type PaidPlan,
-} from '@/lib/server/stripe';
+import { billingChoice, type BillingInterval, type PaidPlan } from '@/lib/billing-config';
 
 export const runtime = 'nodejs';
 
@@ -17,31 +10,21 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const plan = body?.plan as PaidPlan | undefined;
   const interval = body?.interval as BillingInterval | undefined;
+
   if (!['pro', 'business'].includes(plan || '') || !['month', 'year'].includes(interval || '')) {
     return Response.json({ error: 'Choose a valid subscription.' }, { status: 400 });
   }
-  const stripe = getStripe();
-  const priceId = getPriceId(plan!, interval!);
-  if (!stripe || !priceId) {
-    return Response.json({ error: 'This subscription is not available yet.' }, { status: 503 });
-  }
 
-  const customer = await findOrCreateCustomer(stripe, auth.user);
-  const appUrl = getAppUrl();
-  const session = await stripe.checkout.sessions.create({
-    mode: 'subscription',
-    customer,
-    client_reference_id: auth.user.id,
-    line_items: [{ price: priceId, quantity: 1 }],
-    allow_promotion_codes: true,
-    success_url: `${appUrl}/?billing=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/?billing=cancelled`,
-    metadata: { supabase_user_id: auth.user.id, plan: plan! },
-    subscription_data: { metadata: { supabase_user_id: auth.user.id, plan: plan! } },
-  });
-
-  if (!session.url) {
-    return Response.json({ error: 'Stripe did not return a checkout URL.' }, { status: 502 });
+  const choice = billingChoice(plan!, interval!);
+  if (!choice) {
+    return Response.json({ error: 'This subscription is not available.' }, { status: 404 });
   }
-  return Response.json({ url: session.url });
+  const url = new URL(choice.url);
+  url.searchParams.set('client_reference_id', auth.user.id);
+  if (auth.user.email) url.searchParams.set('prefilled_email', auth.user.email);
+
+  return Response.json(
+    { url: url.toString() },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }
