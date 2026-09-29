@@ -158,3 +158,6 @@
 .assistant-voice-error{margin:0 14px 12px;padding:9px 11px;border:1px solid color-mix(in srgb,#ff7b7b 35%,var(--line));border-radius:10px;background:color-mix(in srgb,#ff7b7b 7%,var(--card));font-size:11px;line-height:1.45}
 @keyframes xavierListenPulse{50%{box-shadow:0 0 34px color-mix(in srgb,var(--accent) 25%,transparent)}}
 @media(max-width:700px){.assistant-head{align-items:flex-start}.assistant-head-actions{width:100%;justify-content:space-between}.assistant-voice-toggle{flex:1}.assistant-input{grid-template-columns:minmax(0,1fr) auto!important}.assistant-input .assistant-talk{grid-column:1/-1;width:100%}}
+
+.assistant-voice-test{border:1px solid var(--line);background:transparent;color:var(--text);border-radius:11px;padding:8px 10px;font-size:11px;white-space:nowrap}
+.assistant-voice-test:hover{border-color:color-mix(in srgb,var(--accent) 45%,var(--line));background:color-mix(in srgb,var(--accent) 6%,var(--card2))}

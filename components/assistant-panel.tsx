@@ -182,6 +182,8 @@ export function AssistantPanel({
   const voiceRepliesRef = useRef(true);
   const speechGeneration = useRef(0);
   const speechResumeTimer = useRef<number | null>(null);
+  const speechStartWatchdog = useRef<number | null>(null);
+  const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
 
   function setPhase(next: XavierPhase) {
     setPhaseState(next);
@@ -226,6 +228,13 @@ export function AssistantPanel({
       speechResumeTimer.current = null;
     }
 
+    if (speechStartWatchdog.current !== null) {
+      window.clearTimeout(speechStartWatchdog.current);
+      speechStartWatchdog.current = null;
+    }
+
+    activeUtterance.current = null;
+
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -236,19 +245,11 @@ export function AssistantPanel({
   function primeSpeechOutput() {
     if (!('speechSynthesis' in window)) return;
     refreshVoices();
+    window.speechSynthesis.cancel();
     window.speechSynthesis.resume();
-
-    try {
-      const unlock = new SpeechSynthesisUtterance(' ');
-      unlock.volume = 0;
-      unlock.rate = 2;
-      window.speechSynthesis.speak(unlock);
-    } catch {
-      // Some browsers do not need a speech unlock gesture.
-    }
   }
 
-  function speak(reply: string, force = false) {
+  function speak(reply: string, force = false, directTest = false) {
     if ((!voiceRepliesRef.current && !force) || !('speechSynthesis' in window)) {
       if (force && !('speechSynthesis' in window)) {
         setVoiceError('Spoken replies are not supported by this browser.');
@@ -265,12 +266,23 @@ export function AssistantPanel({
 
     const generation = speechGeneration.current;
     let index = 0;
+    let retriedCurrentChunk = false;
+
+    const clearStartWatchdog = () => {
+      if (speechStartWatchdog.current !== null) {
+        window.clearTimeout(speechStartWatchdog.current);
+        speechStartWatchdog.current = null;
+      }
+    };
 
     const speakNext = () => {
       if (generation !== speechGeneration.current) return;
 
       const text = chunks[index++];
       if (!text) {
+        clearStartWatchdog();
+        activeUtterance.current = null;
+
         if (speechResumeTimer.current !== null) {
           window.clearInterval(speechResumeTimer.current);
           speechResumeTimer.current = null;
@@ -283,32 +295,82 @@ export function AssistantPanel({
         return;
       }
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = 'en-AU';
-      utterance.rate = 0.94;
-      utterance.pitch = 0.9;
-      utterance.volume = 1;
-
-      const voice = chooseVoice();
-      if (voice) utterance.voice = voice;
-
-      utterance.onend = speakNext;
-      utterance.onerror = (event) => {
+      const buildAndSpeak = (useSelectedVoice: boolean) => {
         if (generation !== speechGeneration.current) return;
 
-        if (event.error !== 'interrupted' && event.error !== 'canceled') {
-          setVoiceError('Xavier could not play the spoken reply. Tap Replay voice to try again.');
+        clearStartWatchdog();
+        const utterance = new SpeechSynthesisUtterance(text);
+        activeUtterance.current = utterance;
+        utterance.lang = 'en-AU';
+        utterance.rate = directTest ? 1 : 0.94;
+        utterance.pitch = 0.92;
+        utterance.volume = 1;
+
+        if (useSelectedVoice) {
+          const voice = chooseVoice();
+          if (voice) utterance.voice = voice;
         }
-        stopSpeaking();
+
+        let started = false;
+
+        utterance.onstart = () => {
+          started = true;
+          clearStartWatchdog();
+          setVoiceError('');
+          setPhase('speaking');
+        };
+
+        utterance.onend = () => {
+          clearStartWatchdog();
+          activeUtterance.current = null;
+          retriedCurrentChunk = false;
+          speakNext();
+        };
+
+        utterance.onerror = (event) => {
+          clearStartWatchdog();
+          activeUtterance.current = null;
+
+          if (generation !== speechGeneration.current) return;
+          if (event.error === 'interrupted' || event.error === 'canceled') return;
+
+          if (!retriedCurrentChunk) {
+            retriedCurrentChunk = true;
+            window.speechSynthesis.cancel();
+            window.setTimeout(() => buildAndSpeak(false), 120);
+            return;
+          }
+
+          setVoiceError('Android did not start Xavier voice output. Check Media volume and the phone Text-to-speech engine, then tap Test voice.');
+          stopSpeaking();
+        };
+
+        window.speechSynthesis.cancel();
+        window.speechSynthesis.resume();
+        window.speechSynthesis.speak(utterance);
+
+        speechStartWatchdog.current = window.setTimeout(() => {
+          if (generation !== speechGeneration.current || started) return;
+
+          if (!retriedCurrentChunk) {
+            retriedCurrentChunk = true;
+            window.speechSynthesis.cancel();
+            window.setTimeout(() => buildAndSpeak(false), 120);
+            return;
+          }
+
+          setVoiceError('Xavier created the reply, but Android blocked the voice engine from starting. Tap Test voice once to unlock it.');
+          stopSpeaking();
+        }, 1800);
       };
 
-      window.speechSynthesis.speak(utterance);
+      buildAndSpeak(true);
     };
 
     speechResumeTimer.current = window.setInterval(() => {
       if (generation !== speechGeneration.current) return;
       if (window.speechSynthesis.paused) window.speechSynthesis.resume();
-    }, 5000);
+    }, 4000);
 
     window.speechSynthesis.resume();
     speakNext();
@@ -606,13 +668,28 @@ export function AssistantPanel({
                 className={'assistant-voice-toggle ' + (voiceReplies ? 'active' : '')}
                 onClick={() => {
                   const next = !voiceRepliesRef.current;
-                  if (next) primeSpeechOutput();
                   setVoiceEnabled(next);
+                  if (next) {
+                    primeSpeechOutput();
+                    speak('Xavier voice is on.', true, true);
+                  }
                 }}
                 aria-pressed={voiceReplies}
                 title="Spoken replies"
               >
                 {voiceReplies ? '🔊 Talk back on' : '🔇 Talk back off'}
+              </button>
+
+              <button
+                type="button"
+                className="assistant-voice-test"
+                onClick={() => {
+                  setVoiceEnabled(true);
+                  primeSpeechOutput();
+                  speak('Xavier voice is ready.', true, true);
+                }}
+              >
+                Test voice
               </button>
 
               <button
