@@ -8,6 +8,8 @@ import uuid
 from datetime import datetime, timedelta, timezone
 
 import boto3
+from boto3.dynamodb.conditions import Attr
+from botocore.exceptions import ClientError
 
 REGION = os.environ.get("AWS_REGION", "ap-southeast-2")
 SECRET_ARN = os.environ.get("STRIPE_WEBHOOK_SECRET_ARN", "")
@@ -25,18 +27,8 @@ TOLERANCE_SECONDS = int(
 PRICE_PLAN_MAP = json.loads(
     os.environ.get("PRICE_PLAN_MAP_JSON", "{}")
 )
-DEFAULT_CHECKOUT_PLAN_MAP = {
-    "aud:499": {"plan": "pro", "interval": "month"},
-    "aud:4999": {"plan": "pro", "interval": "year"},
-    "aud:1999": {"plan": "business", "interval": "month"},
-    "aud:19999": {"plan": "business", "interval": "year"},
-}
-CHECKOUT_PLAN_MAP = json.loads(
-    os.environ.get(
-        "CHECKOUT_PLAN_MAP_JSON",
-        json.dumps(DEFAULT_CHECKOUT_PLAN_MAP),
-    )
-)
+PAYMENT_LINK_PLAN_MAP = json.loads(os.environ.get("PAYMENT_LINK_PLAN_MAP_JSON", "{}"))
+EXPECTED_LIVEMODE = os.environ.get("STRIPE_LIVEMODE", "true").lower() == "true"
 secrets = boto3.client("secretsmanager", region_name=REGION)
 lambda_client = boto3.client("lambda", region_name=REGION)
 dynamodb = boto3.resource("dynamodb", region_name=REGION)
@@ -62,9 +54,10 @@ def webhook_secret():
     if not SECRET_ARN:
         raise RuntimeError("Webhook secret is not configured")
     value = secrets.get_secret_value(SecretId=SECRET_ARN)
-    _secret_cache = value.get("SecretString", "")
-    if not _secret_cache:
-        raise RuntimeError("Webhook secret is empty")
+    _secret_cache = value.get("SecretString", "").lstrip("\ufeff").strip()
+    if not _secret_cache.startswith("whsec_"):
+        _secret_cache = None
+        raise RuntimeError("Webhook secret is invalid")
     return _secret_cache
 
 
@@ -185,6 +178,8 @@ def save_mapping(
     interval,
     customer_id,
     checkout_session_id=None,
+    event_created=0,
+    event_priority=0,
 ):
     item = {
         "stripe_subscription_id": subscription_id,
@@ -192,13 +187,33 @@ def save_mapping(
         "plan": plan,
         "interval": interval,
         "stripe_customer_id": customer_id or "",
+        "event_created": int(event_created),
+        "event_priority": event_priority,
         "updated_at": datetime.now(timezone.utc)
         .isoformat()
         .replace("+00:00", "Z"),
     }
     if checkout_session_id:
         item["checkout_session_id"] = checkout_session_id
-    subscription_table.put_item(Item=item)
+    condition = (
+        Attr("event_created").not_exists()
+        | Attr("event_created").lt(int(event_created))
+        | (Attr("event_created").eq(int(event_created)) & (
+            Attr("event_priority").not_exists() | Attr("event_priority").lte(event_priority)
+        ))
+    )
+    if event_priority > 0:
+        condition = condition | Attr("event_priority").eq(0)
+    else:
+        condition = condition & (Attr("event_priority").not_exists() | Attr("event_priority").eq(0))
+    try:
+        subscription_table.put_item(
+            Item=item,
+            ConditionExpression=condition,
+        )
+    except ClientError as exc:
+        if exc.response.get("Error", {}).get("Code") != "ConditionalCheckFailedException":
+            raise
 
 
 def provisional_expiry(event_created, interval):
@@ -224,20 +239,13 @@ def checkout_payload(event):
         return None
 
     user_id = valid_user_id(obj.get("client_reference_id"))
-    metadata = obj.get("metadata") or {}
-    currency = str(obj.get("currency") or "").lower().strip()
-    amount_key = f"{currency}:{int(obj.get('amount_total') or 0)}"
-    amount_mapping = CHECKOUT_PLAN_MAP.get(amount_key) or {}
-    plan = str(
-        metadata.get("plan")
-        or amount_mapping.get("plan")
-        or ""
-    ).lower().strip()
-    interval = str(
-        metadata.get("interval")
-        or amount_mapping.get("interval")
-        or ""
-    ).lower().strip()
+    # Other apps share this Stripe account. Amounts and generic metadata are
+    # not product identity; only these verified Payment Links grant access.
+    link_mapping = PAYMENT_LINK_PLAN_MAP.get(str(obj.get("payment_link") or ""))
+    if not link_mapping:
+        return None
+    plan = str(link_mapping.get("plan") or "")
+    interval = str(link_mapping.get("interval") or "")
     subscription_id = str(obj.get("subscription") or "").strip()
     customer_id = str(obj.get("customer") or "").strip()
 
@@ -247,6 +255,10 @@ def checkout_payload(event):
         or interval not in {"month", "year"}
         or not subscription_id
     ):
+        raise RuntimeError("Planned Out checkout is missing its account mapping")
+
+    existing = load_mapping(subscription_id)
+    if existing and int(existing.get("event_priority", 0)) > 0:
         return None
 
     save_mapping(
@@ -256,6 +268,8 @@ def checkout_payload(event):
         interval,
         customer_id,
         str(obj.get("id") or ""),
+        event.get("created", 0),
+        0,
     )
 
     return {
@@ -266,6 +280,7 @@ def checkout_payload(event):
         "updated_by": "stripe:webhook",
         "event_id": event["id"],
         "event_created": iso_from_epoch(event.get("created")),
+        "event_priority": 0,
         "expires_at": provisional_expiry(
             event.get("created"),
             interval,
@@ -298,12 +313,11 @@ def subscription_payload(event):
         ),
         None,
     )
-    plan = str(
-        mapped_plan
-        or metadata.get("plan")
-        or mapping.get("plan")
-        or ""
-    ).lower().strip()
+    plan = str(mapped_plan or "").lower().strip()
+    if not mapped_plan:
+        if mapping:
+            raise RuntimeError("Mapped subscription has an unrecognized price")
+        return None
 
     intervals = [
         str(((item.get("price") or {}).get("recurring") or {}).get("interval") or "")
@@ -314,7 +328,9 @@ def subscription_payload(event):
         str(mapping.get("interval") or ""),
     )
     if not user_id or plan not in {"pro", "business"}:
-        return None
+        # Subscription events can arrive before Checkout. A retry must retain
+        # this event until Checkout has written client_reference_id's mapping.
+        raise RuntimeError("Subscription account mapping is not yet available")
 
     status = map_status(obj.get("status"))
     period_ends = [
@@ -327,10 +343,7 @@ def subscription_payload(event):
         or (max(period_ends) if period_ends else None)
     )
     if status in {"active", "trialing"} and not expires_at:
-        expires_at = provisional_expiry(
-            event.get("created"),
-            interval if interval in {"month", "year"} else "month",
-        )
+        raise RuntimeError("Active subscription is missing its paid period")
 
     customer_id = str(obj.get("customer") or "")
     save_mapping(
@@ -340,6 +353,8 @@ def subscription_payload(event):
         interval if interval in {"month", "year"} else "month",
         customer_id,
         mapping.get("checkout_session_id"),
+        event.get("created", 0),
+        2 if event["type"] == "customer.subscription.deleted" else 1,
     )
 
     payload = {
@@ -350,6 +365,7 @@ def subscription_payload(event):
         "updated_by": "stripe:webhook",
         "event_id": event["id"],
         "event_created": iso_from_epoch(event.get("created")),
+        "event_priority": 2 if event["type"] == "customer.subscription.deleted" else 1,
         "stripe_customer_id": customer_id,
         "stripe_subscription_id": subscription_id,
     }
@@ -371,6 +387,12 @@ def lambda_handler(event, context):
             )
 
         stripe_event = json.loads(payload)
+        if not isinstance(stripe_event, dict) or not isinstance(stripe_event.get("data"), dict):
+            return response(400, {"error": "Invalid webhook payload"})
+        if stripe_event.get("livemode") is not EXPECTED_LIVEMODE:
+            return response(400, {"error": "Incorrect Stripe mode"})
+        if not stripe_event.get("id") or not isinstance(stripe_event.get("created"), int):
+            return response(400, {"error": "Invalid webhook payload"})
         event_type = str(stripe_event.get("type") or "")
         if event_type in {
             "checkout.session.completed",

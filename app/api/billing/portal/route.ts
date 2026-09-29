@@ -7,8 +7,11 @@ export async function POST(request: Request) {
   const auth = await requireBillingUser(request);
   if (!auth.ok) return auth.response;
 
+  const url = stripeCustomerPortalUrl();
+  if (!url) return Response.json({ error: 'Billing management is temporarily unavailable.' }, { status: 503 });
+
   return Response.json(
-    { url: stripeCustomerPortalUrl },
+    { url },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

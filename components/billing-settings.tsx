@@ -83,7 +83,7 @@ export function BillingSettings({ user, plan }: { user: User | null; plan: Plan 
       <div><strong>Current plan: {plan === 'business' ? 'Business / Full' : plan === 'pro' ? 'Pro' : 'Free'}</strong>
         <p>Subscriptions unlock the premium Xavier experience. Payments and card details are handled by Stripe.</p>
       </div>
-      {user && plan !== 'free' && <button disabled={Boolean(busy)} onClick={() => void post('/api/billing/portal')}>Manage billing</button>}
+      {user && <button disabled={Boolean(busy)} onClick={() => void post('/api/billing/portal')}>Manage billing</button>}
     </div>
     <div className="billing-toggle" role="group" aria-label="Billing interval">
       <button className={interval === 'month' ? 'chosen' : ''} onClick={() => setInterval('month')}>Monthly</button>

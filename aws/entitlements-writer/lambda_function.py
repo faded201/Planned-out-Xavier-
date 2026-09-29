@@ -14,6 +14,7 @@ AUDIT_TABLE_NAME = os.environ.get(
     "AUDIT_TABLE",
     "PlannedOut-Membership-Audit"
 )
+OWNER_USER_ID = os.environ.get("OWNER_USER_ID", "06b5e7ce-9624-4afb-b2e9-24fc095038d5")
 
 dynamodb = boto3.resource("dynamodb", region_name=REGION)
 table = dynamodb.Table(TABLE_NAME)
@@ -48,6 +49,8 @@ def iso_datetime(value):
         parsed = datetime.fromisoformat(
             str(value).replace("Z", "+00:00")
         )
+        if parsed.tzinfo is None:
+            return None
         parsed = parsed.astimezone(timezone.utc)
         return parsed.isoformat().replace("+00:00", "Z")
     except (ValueError, TypeError):
@@ -72,6 +75,7 @@ def lambda_handler(event, context):
         updated_by = str(body.get("updated_by", "")).strip()
         event_id = str(body.get("event_id", "")).strip()
         event_created = iso_datetime(body.get("event_created"))
+        event_priority = int(body.get("event_priority", 1))
 
         stripe_customer_id = str(
             body.get("stripe_customer_id", "")
@@ -99,6 +103,28 @@ def lambda_handler(event, context):
                 {"error": "valid event_created is required"}
             )
 
+        current = table.get_item(Key={"user_id": user_id}, ConsistentRead=True).get("Item") or {}
+        if updated_by == "stripe:webhook" and (user_id == OWNER_USER_ID or current.get("permanent") is True):
+            return response(200, {"updated": False, "reason": "protected_grant"})
+        previous_created = iso_datetime(current.get("last_event_created"))
+        incoming_time = datetime.fromisoformat(event_created.replace("Z", "+00:00"))
+        previous_time = datetime.fromisoformat(previous_created.replace("Z", "+00:00")) if previous_created else None
+        same_subscription = (updated_by == "stripe:webhook" and stripe_subscription_id
+            and current.get("stripe_subscription_id") == stripe_subscription_id)
+        previous_priority = int(current.get("last_event_priority", 1))
+        if same_subscription and event_priority == 0 and previous_priority > 0:
+            return response(200, {"updated": False, "reason": "authoritative_subscription_exists"})
+        replaces_provisional = same_subscription and previous_priority == 0 and event_priority > 0
+        if current.get("last_event_id") == event_id or (previous_time and not replaces_provisional and (
+            previous_time > incoming_time or (previous_time == incoming_time
+                and int(current.get("last_event_priority", 1)) > event_priority)
+        )):
+            return response(200, {"updated": False, "reason": "duplicate_or_stale_event"})
+        if (updated_by == "stripe:webhook" and status not in {"active", "trialing"}
+            and current.get("stripe_subscription_id")
+            and current["stripe_subscription_id"] != stripe_subscription_id):
+            return response(200, {"updated": False, "reason": "different_subscription"})
+
         # Paid active/trial entitlements require an expiry unless the trusted
         # caller explicitly marks the owner-issued grant as permanent.
         if (
@@ -121,6 +147,7 @@ def lambda_handler(event, context):
             ":status": status,
             ":event_id": event_id,
             ":event_created": event_created,
+            ":event_priority": event_priority,
             ":updated_at": now
         }
 
@@ -135,6 +162,7 @@ def lambda_handler(event, context):
             "#status = :status",
             "last_event_id = :event_id",
             "last_event_created = :event_created",
+            "last_event_priority = :event_priority",
             "updated_at = :updated_at",
             "permanent = :permanent"
         ]
@@ -160,45 +188,46 @@ def lambda_handler(event, context):
                 "stripe_subscription_id = :subscription"
             )
 
-        # Prevent exact duplicates and older events from replacing newer state.
-        # Stripe timestamps have one-second resolution, so different events
-        # created in the same second are accepted in arrival order.
+        # Compare timestamps as datetimes, then lock the snapshot read above.
+        # Checkout cannot replace an authoritative subscription event from the
+        # same second. The audit key deduplicates even non-consecutive replays.
         update_expression = "SET " + ", ".join(updates)
         if removes:
             update_expression += " REMOVE " + ", ".join(removes)
 
-        table.update_item(
-            Key={"user_id": user_id},
-            UpdateExpression=update_expression,
-            ConditionExpression=(
-                "(attribute_not_exists(last_event_id) "
-                "OR last_event_id <> :event_id) "
-                "AND "
-                "(attribute_not_exists(last_event_created) "
-                "OR last_event_created <= :event_created)"
-            ),
-            ExpressionAttributeNames=names,
-            ExpressionAttributeValues=values
-        )
+        condition = "attribute_not_exists(last_event_id)"
+        if current.get("last_event_id"):
+            condition = "last_event_id = :previous_event_id"
+            values[":previous_event_id"] = current["last_event_id"]
 
-        # Owner/admin mutations are also recorded append-only for traceability.
-        if updated_by:
-            audit_item = {
+        audit_item = {
                 "event_id": event_id,
                 "event_created": event_created,
-                "actor_id": updated_by,
+                "actor_id": updated_by or "trusted:writer",
                 "user_id": user_id,
                 "plan": plan,
                 "status": status,
                 "permanent": permanent,
                 "updated_at": now
-            }
-            if expires_at:
-                audit_item["expires_at"] = expires_at
-            audit_table.put_item(
-                Item=audit_item,
-                ConditionExpression="attribute_not_exists(event_id)"
-            )
+        }
+        if expires_at:
+            audit_item["expires_at"] = expires_at
+        # A retry must never acknowledge a write whose audit record was lost.
+        dynamodb.meta.client.transact_write_items(TransactItems=[
+            {"Update": {
+                "TableName": TABLE_NAME,
+                "Key": {"user_id": user_id},
+                "UpdateExpression": update_expression,
+                "ConditionExpression": condition,
+                "ExpressionAttributeNames": names,
+                "ExpressionAttributeValues": values,
+            }},
+            {"Put": {
+                "TableName": AUDIT_TABLE_NAME,
+                "Item": audit_item,
+                "ConditionExpression": "attribute_not_exists(event_id)",
+            }},
+        ])
 
         return response(
             200,
@@ -216,6 +245,12 @@ def lambda_handler(event, context):
     except ClientError as exc:
         code = exc.response.get("Error", {}).get("Code")
 
+        if code == "TransactionCanceledException":
+            reasons = exc.response.get("CancellationReasons", [])
+            if len(reasons) > 1 and reasons[1].get("Code") == "ConditionalCheckFailed":
+                return response(200, {"updated": False, "reason": "duplicate_or_stale_event"})
+            return response(503, {"error": "Entitlement update must be retried"})
+
         if code == "ConditionalCheckFailedException":
             return response(
                 200,
@@ -231,6 +266,9 @@ def lambda_handler(event, context):
             exc.response.get("Error", {}).get("Message")
         )
         return response(500, {"error": "Entitlement update failed"})
+
+    except (ValueError, TypeError):
+        return response(400, {"error": "Invalid entitlement payload"})
 
     except Exception as exc:
         print(

@@ -1,5 +1,5 @@
 import { requireBillingUser } from '@/lib/server/billing-auth';
-import { billingChoice, type BillingInterval, type PaidPlan } from '@/lib/billing-config';
+import { billingChoice, paymentLink, type BillingInterval, type PaidPlan } from '@/lib/billing-config';
 
 export const runtime = 'nodejs';
 
@@ -19,7 +19,9 @@ export async function POST(request: Request) {
   if (!choice) {
     return Response.json({ error: 'This subscription is not available.' }, { status: 404 });
   }
-  const url = new URL(choice.url);
+  const link = paymentLink(choice);
+  if (!link) return Response.json({ error: 'This subscription is temporarily unavailable.' }, { status: 503 });
+  const url = new URL(link);
   url.searchParams.set('client_reference_id', auth.user.id);
   if (auth.user.email) url.searchParams.set('prefilled_email', auth.user.email);
 
