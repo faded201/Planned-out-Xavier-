@@ -2,31 +2,7 @@ import type { PlannerTask, PlannerLevel } from '@/lib/types';
 import { getSupabase } from '@/lib/supabase';
 
 export const MODEL_OPTIONS = [
-  {
-    id: 'auto',
-    label: 'Auto · Best Free',
-    detail: 'Best available free model with automatic fallback.',
-  },
-  {
-    id: 'nemotron-3-120b',
-    label: 'Nemotron 3 Super 120B',
-    detail: 'Agentic planning, multi-step reasoning and tool-oriented work.',
-  },
-  {
-    id: 'gpt-oss-120b',
-    label: 'GPT-OSS 120B',
-    detail: 'Open-weight cloud model; separate from ChatGPT accounts.',
-  },
-  {
-    id: 'gemma-4-26b',
-    label: 'Gemma 4 26B',
-    detail: 'Fast, efficient reasoning with a very large context window.',
-  },
-  {
-    id: 'qwen-3.8-27b',
-    label: 'Qwen 3.8 27B',
-    detail: 'Qwen reasoning, vision-capable architecture and agentic workloads.',
-  },
+  { id: 'auto', label: 'Xavier · Nova Lite', detail: 'Secure cloud assistance with your Free, Pro or Business allowance.' },
 ] as const;
 
 export type AssistantModelChoice = (typeof MODEL_OPTIONS)[number]['id'];
@@ -102,13 +78,15 @@ async function callAssistant(
     ? await supabase.auth.getSession()
     : { data: { session: null } };
   const accessToken = sessionData.session?.access_token;
+  if (!accessToken) throw new Error('Sign in to Planned Out to use Xavier.');
 
   const response = await fetch('/api/assistant', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      Authorization: `Bearer ${accessToken}`,
     },
+    signal: AbortSignal.timeout(45_000),
     body: JSON.stringify({
       prompt,
       context,
@@ -143,12 +121,12 @@ export async function serverAIChat(
   model: AssistantModelChoice,
   onProgress: (message: string) => void,
 ): Promise<ServerAIResult> {
-  onProgress('Connecting to free cloud AI…');
+  onProgress('Connecting to Xavier…');
 
   const result = await callAssistant(prompt, context, history, model);
 
   onProgress(
-    result.model ? `Using ${result.model}…` : 'Free AI connected…',
+    result.model ? `Using ${result.model}…` : 'Xavier connected…',
   );
 
   return result;
@@ -206,7 +184,7 @@ export async function qwenOrLlamaBreakdown(
   childLevel: PlannerLevel,
   onProgress: (message: string) => void,
 ): Promise<PlannerTask[]> {
-  onProgress('Planning with free cloud AI…');
+  onProgress('Planning with Xavier…');
 
   const prompt = [
     'Break this goal into practical child steps.',
@@ -262,7 +240,7 @@ export async function qwenOrLlamaBreakdown(
       updatedAt: new Date().toISOString(),
     }));
   } catch {
-    onProgress('Free cloud AI unavailable — using instant smart templates…');
+    onProgress('Xavier unavailable — using instant smart templates…');
     return instantBreakdown(parent, childLevel);
   }
 }

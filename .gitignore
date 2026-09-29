@@ -1,6 +1,10 @@
 node_modules
 .next
 .env*.local
+.env
+.env.*
+!.env.example
+__pycache__/
 *.tsbuildinfo
 .DS_Store
 supabase/.temp

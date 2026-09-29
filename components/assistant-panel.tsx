@@ -273,7 +273,7 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
           <header className="assistant-head">
             <div style={{ flex: 1, minWidth: 0 }}>
               <strong>Xavier AI</strong>
-              <small>Free cloud AI · no phone GPU required</small>
+              <small>Your secure planning assistant</small>
 
               <select
                 value={selectedModel}
@@ -324,8 +324,7 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
             {messages.length === 0 && (
               <div className="assistant-empty">
                 <p>
-                  Hi Xavier. Choose a model above, or leave it on Auto and I
-                  will use the strongest available free option.
+                  Ask Xavier to help plan, prioritize, or break down your goals. Sign in to use your monthly allowance.
                 </p>
 
                 <div className="assistant-chips">
@@ -372,7 +371,7 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
             {busy && messages[messages.length - 1]?.role === 'user' && (
               <div className="assistant-msg assistant">
                 <span className="assistant-typing">
-                  {progress || 'Connecting to free AI…'}
+                  {progress || 'Connecting to Xavier…'}
                 </span>
               </div>
             )}
