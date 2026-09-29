@@ -10,6 +10,8 @@ REGION = "ap-southeast-2"
 
 bedrock = boto3.client("bedrock-runtime", region_name=REGION,
     config=Config(connect_timeout=2, read_timeout=15, retries={"total_max_attempts": 1}))
+lambda_client = boto3.client("lambda", region_name=REGION,
+    config=Config(connect_timeout=2, read_timeout=5, retries={"total_max_attempts": 1}))
 dynamodb = boto3.resource("dynamodb", region_name=REGION,
     config=Config(connect_timeout=2, read_timeout=2, retries={"total_max_attempts": 1}))
 
@@ -28,6 +30,9 @@ PLAN_LIMITS = {
 
 BURST_LIMIT = int(os.environ.get("BURST_LIMIT", "20"))
 OWNER_USER_ID = os.environ.get("OWNER_USER_ID", "06b5e7ce-9624-4afb-b2e9-24fc095038d5")
+ENTITLEMENTS_WRITER_FUNCTION = os.environ.get(
+    "ENTITLEMENTS_WRITER_FUNCTION", "PlannedOut-Entitlements-Writer"
+)
 
 usage_table = dynamodb.Table(USAGE_TABLE)
 entitlements_table = dynamodb.Table(ENTITLEMENTS_TABLE)
@@ -178,12 +183,33 @@ def handle_admin_membership(event, actor_id):
         if expiry is None or expiry <= datetime.now(timezone.utc):
             return api_response(400, {"error": "Future expiry required"})
         expires_at = expiry.isoformat()
-    item = {"user_id": target, "plan": plan, "status": "active" if plan != "free" else "free",
-            "permanent": permanent, "updated_by": actor_id, "updated_at": datetime.now(timezone.utc).isoformat()}
+    now = datetime.now(timezone.utc)
+    writer_event = {
+        "user_id": target,
+        "plan": plan,
+        "status": "active" if plan != "free" else "expired",
+        "permanent": permanent,
+        "updated_by": actor_id,
+        "event_id": "admin-" + str(event.get("requestContext", {}).get("requestId", now.timestamp())),
+        "event_created": now.isoformat()
+    }
     if expires_at:
-        item["expires_at"] = expires_at
-    entitlements_table.put_item(Item=item)
-    return api_response(200, {"updated": True, "userId": target, "plan": plan,
+        writer_event["expires_at"] = expires_at
+    invoke = lambda_client.invoke(
+        FunctionName=ENTITLEMENTS_WRITER_FUNCTION,
+        InvocationType="RequestResponse",
+        Payload=json.dumps(writer_event).encode("utf-8")
+    )
+    writer_result = json.loads(invoke["Payload"].read().decode("utf-8"))
+    writer_status = int(writer_result.get("statusCode", 500))
+    writer_body = writer_result.get("body", "{}")
+    try:
+        writer_body = json.loads(writer_body) if isinstance(writer_body, str) else writer_body
+    except json.JSONDecodeError:
+        writer_body = {"error": "Invalid writer response"}
+    if writer_status >= 400:
+        return api_response(502, {"error": "Membership update failed"})
+    return api_response(200, {"updated": writer_body.get("updated", False), "userId": target, "plan": plan,
                               "permanent": permanent, "expiresAt": expires_at})
 
 
