@@ -230,6 +230,17 @@ def lambda_handler(event, context):
         if event.get("rawPath") == "/admin/memberships":
             return handle_admin_membership(event, user_id)
 
+        if event.get("rawPath") == "/entitlement":
+            entitlement = get_entitlement(user_id)
+            plan = entitlement["plan"]
+            return api_response(200, {
+                "plan": plan,
+                "status": entitlement["status"],
+                "expiresAt": entitlement.get("expires_at"),
+                "premiumUi": plan in {"pro", "business"},
+                "owner": user_id == OWNER_USER_ID
+            })
+
         body = event.get("body", event)
 
         if isinstance(body, str):

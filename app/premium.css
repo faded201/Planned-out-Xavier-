@@ -1,0 +1,31 @@
+/* Xavier living UI: premium entitlement is server-derived; CSS only renders the granted capability. */
+.assistant-orb-dock{position:fixed;right:22px;bottom:22px;z-index:61}
+.xavier-orb{width:82px;height:82px;border:0;background:transparent;position:relative;cursor:pointer;color:var(--text)}
+.xavier-orb-halo{position:absolute;inset:5px;border-radius:50%;background:radial-gradient(circle,rgba(116,236,255,.3),transparent 68%);filter:blur(4px);animation:xBreath 3.4s ease-in-out infinite}
+.xavier-orb-core{position:absolute;inset:14px;border-radius:50%;display:block;transform-style:preserve-3d;animation:xFloat 5s ease-in-out infinite}
+.xavier-orb-core i{--a:calc(var(--cube)*37deg);position:absolute;left:50%;top:50%;width:9px;height:9px;border:1px solid currentColor;border-radius:2px;background:color-mix(in srgb,currentColor 32%,transparent);transform:rotate(var(--a)) translateX(calc(13px + (var(--cube) % 5)*5px)) rotate(calc(var(--a)*-1));box-shadow:0 0 10px currentColor}
+.xavier-orb-state{position:absolute;left:50%;bottom:-9px;transform:translateX(-50%);font-size:8px;text-transform:uppercase;letter-spacing:.13em;opacity:.8}
+.xavier-orb.premium{width:98px;height:98px;color:#8ef6ff}.xavier-orb.standard{color:var(--accent)}
+.phase-listening .xavier-orb-halo{animation:xListen .65s ease-in-out infinite}.phase-understanding .xavier-orb-core,.phase-planning .xavier-orb-core{animation:xThink 1.6s linear infinite}
+.phase-executing .xavier-orb-core{animation:xExecute .8s ease-in-out infinite}.phase-speaking .xavier-orb-halo{animation:xSpeak .42s ease-in-out infinite}.phase-completed .xavier-orb-core{animation:xComplete .7s ease-out}
+@keyframes xBreath{50%{transform:scale(1.12);opacity:.65}}@keyframes xFloat{50%{transform:translateY(-4px) rotate(7deg)}}@keyframes xListen{50%{transform:scale(1.3);opacity:1}}@keyframes xThink{to{transform:rotate(360deg)}}@keyframes xExecute{50%{transform:scale(.86) rotate(16deg)}}@keyframes xSpeak{50%{transform:scale(1.2);filter:blur(1px)}}@keyframes xComplete{50%{transform:scale(1.32)}}
+.living-picker-head{display:flex;align-items:center;justify-content:space-between;gap:12px}.living-picker-head span{font-size:10px;font-weight:900;letter-spacing:.12em;color:var(--accent)}
+.living-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}.living-grid button{text-align:left;display:grid;gap:5px;min-height:108px}.living-grid button>span{font-size:10px;opacity:.65}.living-grid button small{opacity:.7;line-height:1.35}
+.living-grid button:disabled{opacity:.42;cursor:not-allowed}.premium-note{display:block;margin-top:12px;opacity:.72}
+.premium-ui .calendar-pro-page,.premium-ui .page{position:relative;isolation:isolate}.premium-ui .calendar-pro-page:before,.premium-ui .page:before{content:"";position:fixed;inset:0;pointer-events:none;z-index:-1;opacity:.22;animation:livingBreath 7s ease-in-out infinite}
+@keyframes livingBreath{50%{opacity:.38;transform:scale(1.015)}}
+.living-neural-command .page:before,.living-neural-command .calendar-pro-page:before{background:radial-gradient(circle at 20% 20%,#7c4dff 0,transparent 30%),radial-gradient(circle at 80% 70%,#00e5ff 0,transparent 26%)}
+.living-living-timeline .page:before,.living-living-timeline .calendar-pro-page:before{background:repeating-linear-gradient(90deg,transparent 0 9%,rgba(85,220,255,.3) 10%,transparent 11%);animation-duration:10s}
+.living-constellation-planner .page:before,.living-constellation-planner .calendar-pro-page:before{background:radial-gradient(circle at 15% 25%,#fff 0 1px,transparent 2px),radial-gradient(circle at 70% 18%,#fff 0 1px,transparent 2px),radial-gradient(circle at 55% 75%,#80eaff 0 2px,transparent 3px);background-size:120px 120px,170px 170px,230px 230px}
+.living-xavier-cortex .page:before,.living-xavier-cortex .calendar-pro-page:before{background:repeating-radial-gradient(ellipse at center,transparent 0 30px,rgba(132,99,255,.22) 31px 32px,transparent 33px 60px)}
+.living-liquid-intelligence .page:before,.living-liquid-intelligence .calendar-pro-page:before{background:radial-gradient(ellipse at 20% 40%,#00d9ff 0,transparent 40%),radial-gradient(ellipse at 80% 60%,#7d5cff 0,transparent 45%);filter:blur(24px)}
+.living-cube-matrix .page:before,.living-cube-matrix .calendar-pro-page:before{background:linear-gradient(rgba(95,230,255,.15) 1px,transparent 1px),linear-gradient(90deg,rgba(95,230,255,.15) 1px,transparent 1px);background-size:42px 42px;transform:perspective(600px) rotateX(8deg)}
+.living-mission-control .page:before,.living-mission-control .calendar-pro-page:before{background:radial-gradient(circle,transparent 0 28%,rgba(255,190,70,.25) 29% 30%,transparent 31% 47%,rgba(255,190,70,.18) 48% 49%,transparent 50%)}
+.living-temporal-rings .page:before,.living-temporal-rings .calendar-pro-page:before{background:repeating-radial-gradient(circle at 50% 45%,transparent 0 55px,rgba(80,215,255,.22) 56px 57px,transparent 58px 95px);animation-duration:12s}
+.living-thought-stream .page:before,.living-thought-stream .calendar-pro-page:before{background:repeating-linear-gradient(115deg,transparent 0 55px,rgba(153,100,255,.16) 56px 58px,transparent 59px 110px);animation:thoughtFlow 9s linear infinite}
+.living-living-workspace .page:before,.living-living-workspace .calendar-pro-page:before{background:radial-gradient(ellipse at top left,#39e6c7 0,transparent 32%),radial-gradient(ellipse at bottom right,#8b5cff 0,transparent 38%)}
+@keyframes thoughtFlow{to{background-position:260px 0}}
+.premium-ui.xavier-listening .card,.premium-ui.xavier-listening .panel{animation:uiListen 1.1s ease-in-out infinite}.premium-ui.xavier-planning .card,.premium-ui.xavier-executing .card{animation:uiWork 1.8s ease-in-out infinite}
+@keyframes uiListen{50%{box-shadow:0 0 22px color-mix(in srgb,var(--accent) 24%,transparent)}}@keyframes uiWork{50%{transform:translateY(-2px)}}
+@media(max-width:700px){.living-grid{grid-template-columns:1fr}.assistant-orb-dock{right:12px;bottom:14px}.xavier-orb.premium{width:84px;height:84px}}
+@media(prefers-reduced-motion:reduce){.premium-ui *,.xavier-orb *{animation-duration:.001ms!important;animation-iteration-count:1!important}}

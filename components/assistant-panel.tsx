@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { XavierOrb, type XavierPhase } from '@/components/xavier-orb';
 import {
   MODEL_OPTIONS,
   serverAIChat,
@@ -84,7 +85,7 @@ function isModelChoice(value: string): value is AssistantModelChoice {
   return MODEL_OPTIONS.some((option) => option.id === value);
 }
 
-export function AssistantPanel({ actions }: { actions: AssistantActions }) {
+export function AssistantPanel({ actions, premium = false, onPhaseChange }: { actions: AssistantActions; premium?: boolean; onPhaseChange?: (phase: XavierPhase) => void }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState('');
   const [selectedModel, setSelectedModel] =
@@ -99,7 +100,9 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
   const [listening, setListening] = useState(false);
   const [voiceReplies, setVoiceReplies] = useState(false);
   const [voiceError, setVoiceError] = useState('');
+  const [phase, setPhaseState] = useState<XavierPhase>('dormant');
   const recognition = useRef<SpeechRecognitionLike | null>(null);
+  function setPhase(next: XavierPhase) { setPhaseState(next); onPhaseChange?.(next); }
 
   useEffect(() => {
     const saved = window.localStorage.getItem(MODEL_STORAGE_KEY);
@@ -117,6 +120,8 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
     const utterance = new SpeechSynthesisUtterance(reply);
     utterance.lang = 'en-AU';
     utterance.rate = 0.96;
+    utterance.onstart = () => setPhase('speaking');
+    utterance.onend = () => { setPhase('completed'); window.setTimeout(() => setPhase('dormant'), 900); };
     window.speechSynthesis.speak(utterance);
   }
 
@@ -162,12 +167,13 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
       instance.interimResults = false;
       instance.onresult = (event) => {
         const transcript = event.results[0]?.[0]?.transcript?.trim();
-        if (transcript) { setInput(transcript); submit(transcript); }
+        if (transcript) { setPhase('understanding'); setInput(transcript); submit(transcript); }
       };
-      instance.onerror = () => { setVoiceError('Microphone permission or speech recognition failed. Try again or type your command.'); setListening(false); };
+      instance.onerror = () => { setVoiceError('Microphone permission or speech recognition failed. Try again or type your command.'); setListening(false); setPhase('dormant'); };
       instance.onend = () => setListening(false);
       instance.start();
       setListening(true);
+      setPhase('listening');
     } catch { setVoiceError('Could not start the microphone.'); setListening(false); }
   }
 
@@ -197,9 +203,11 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
     ]);
 
     setBusy(true);
+    setPhase('planning');
 
     try {
       const commandReply = runCommand(text);
+      setPhase(commandReply ? 'executing' : 'understanding');
       const result = commandReply ? { text: commandReply, model: 'Voice command' } : await serverAIChat(
         text,
         actionsRef.current.getContext(),
@@ -217,7 +225,8 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
           model: result.model,
         },
       ]);
-      speak(result.text);
+      if (voiceReplies) speak(result.text);
+      else { setPhase('completed'); window.setTimeout(() => setPhase('dormant'), 900); }
     } catch (error) {
       setMessages((current) => [
         ...current,
@@ -256,13 +265,9 @@ export function AssistantPanel({ actions }: { actions: AssistantActions }) {
 
   return (
     <>
-      <button
-        className="assistant-fab"
-        onClick={() => setOpen((value) => !value)}
-        aria-label={open ? 'Close Xavier AI' : 'Open Xavier AI'}
-      >
-        {open ? '×' : '✦ AI'}
-      </button>
+      <div className="assistant-orb-dock">
+        <XavierOrb phase={phase} premium={premium} onActivate={() => setOpen((value) => !value)} />
+      </div>
 
       {open && (
         <section
