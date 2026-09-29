@@ -12,6 +12,7 @@ import { MembershipAdmin } from '@/components/membership-admin';
 import { BillingSettings } from '@/components/billing-settings';
 import { usePremiumExperience } from '@/components/premium-experience';
 import { LivingLayoutPicker } from '@/components/living-layout-picker';
+import { LivingLayoutStage } from '@/components/living-layout-stage';
 import type { XavierPhase } from '@/components/xavier-orb';
 import { disablePushNotifications, enablePushNotifications, registerPushWorker } from '@/lib/push';
 import {
@@ -891,6 +892,9 @@ export function UltimatePlanner() {
   }
 
   const shellClass = `xp-shell theme-${state.theme} density-${state.density} preset-${state.visualPreset} ${entitlement.premiumUi ? `premium-ui living-${livingLayout} xavier-${xavierPhase}` : 'free-ui'}`;
+  const livingTodayKey = new Date().toLocaleDateString('en-CA');
+  const activeTaskCount = state.tasks.filter((task) => task.status !== 'done').length;
+  const dueTodayCount = state.tasks.filter((task) => task.status !== 'done' && (task.dueDate === livingTodayKey || task.startDate === livingTodayKey)).length;
   return <div className={shellClass}>
     {mobileOpen && <button className="overlay" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
@@ -901,6 +905,14 @@ export function UltimatePlanner() {
     </aside>
     <main className="main">
       <header className="topbar"><button className="menu" onClick={() => setMobileOpen(true)}>☰</button><div><span className="eyebrow">WORLD-CLASS PLANNER</span><h1>{views.find((item) => item.id === view)?.label || 'Command'}</h1></div><div className="search"><span>⌕</span><input placeholder="Search tasks, files, notes, finance, health…" value={query} onChange={(event) => setQuery(event.target.value)} /></div><button className="primary" onClick={() => openTask('daily')}>Create</button></header>
+      {entitlement.premiumUi && <LivingLayoutStage
+        layout={livingLayout}
+        phase={xavierPhase}
+        viewLabel={views.find((item) => item.id === view)?.label || 'Command'}
+        activeTasks={activeTaskCount}
+        dueToday={dueTodayCount}
+        overdue={overdue}
+      />}
       {notice && <div className="notice">{notice}</div>}
       {view === 'dashboard' && <Dashboard
         tasks={state.tasks}
@@ -918,7 +930,7 @@ export function UltimatePlanner() {
         onInstallTemplate={installTemplate}
       />}
       {view === 'planner' && <PlannerView tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTaskId} onNew={openTask} onEdit={editTask} onToggle={toggleTask} onDelete={deleteTask} />}
-      {view === 'calendar' && <CollaborativeCalendar user={user} tasks={filteredTasks} onSelectTask={setSelectedTaskId} onCreateTask={() => openTask('daily')} onRequestSignIn={() => setShowAuth(true)} />}
+      {view === 'calendar' && <CollaborativeCalendar user={user} tasks={filteredTasks} premium={entitlement.premiumUi} livingLayout={livingLayout} onSelectTask={setSelectedTaskId} onCreateTask={() => openTask('daily')} onRequestSignIn={() => setShowAuth(true)} />}
       {view === 'board' && <BoardView tasks={filteredTasks} onSelect={setSelectedTaskId} onMove={toggleTask} />}
       {view === 'focus' && <FocusView tasks={filteredTasks} onSelect={setSelectedTaskId} onDone={(task) => void toggleTask(task, 'done')} />}
       {view === 'files' && <FilesView files={activeFiles} tasks={state.tasks} onAttach={() => fileInput.current?.click()} onOpen={(file) => void openFile(file)} />}

@@ -5,6 +5,8 @@ import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import type { PlannerTask } from '@/lib/types';
 import { nextOccurrence, type RepeatRule } from '@/lib/recurrence';
+import type { LivingLayout } from '@/lib/premium';
+import { LivingCalendarArchitecture } from '@/components/living-calendar-architecture';
 
 type CalendarRole = 'viewer' | 'editor';
 type CalendarAccess = 'owner' | CalendarRole | 'private';
@@ -129,12 +131,16 @@ function roleLabel(role: CalendarAccess) {
 export function CollaborativeCalendar({
   user,
   tasks,
+  premium = false,
+  livingLayout = 'neural-command',
   onSelectTask,
   onCreateTask,
   onRequestSignIn
 }: {
   user: User | null;
   tasks: PlannerTask[];
+  premium?: boolean;
+  livingLayout?: LivingLayout;
   onSelectTask: (id: string) => void;
   onCreateTask: () => void;
   onRequestSignIn: () => void;
@@ -481,8 +487,18 @@ export function CollaborativeCalendar({
     if (!event.recurrence || event.recurrence === 'none') return false;
     return nextOccurrence(occurrence, event.recurrence, date) === date;
   });
+  const visibleDateKeys = new Set(days.map(localDateKey));
+  const visiblePrivateTasks = tasks.filter((task) => visibleDateKeys.has(task.startDate || '') || visibleDateKeys.has(task.dueDate || '')).length;
+  const visibleFeedEvents = feedEvents.filter((item) => visibleDateKeys.has(localDateKey(new Date(item.starts_at)))).length;
+  const visibleSharedEvents = events.filter((item) => visibleDateKeys.has(localDateKey(new Date(item.starts_at)))).length;
+  const todayItemCount = activeCalendarId === 'private'
+    ? privateTasksForDay(today).length + feedEvents.filter((item) => localDateKey(new Date(item.starts_at)) === today).length
+    : sharedEventsForDay(today).length;
+  const visibleItemCount = activeCalendarId === 'private'
+    ? visiblePrivateTasks + visibleFeedEvents
+    : visibleSharedEvents;
 
-  return <section className="page calendar-pro-page">
+  return <section className={`page calendar-pro-page ${premium ? `calendar-architecture-mode architecture-${livingLayout}` : ''}`}>
     <div className="calendar-pro-hero">
       <div>
         <p className="eyebrow">CALENDAR PLANNER · SHARED ACCESS</p>
@@ -497,6 +513,15 @@ export function CollaborativeCalendar({
     </div>
 
     {message && <div className="calendar-pro-message">{message}</div>}
+
+    {premium && <LivingCalendarArchitecture
+      layout={livingLayout}
+      month={monthLabel(month)}
+      activeSpace={activeCalendar?.name || 'My Planner'}
+      access={activeCalendar ? roleLabel(access) : 'Private'}
+      visibleItems={visibleItemCount}
+      todayItems={todayItemCount}
+    />}
 
     {incomingInvites.length > 0 && <div className="calendar-invite-banner">
       <div><strong>{incomingInvites.length} calendar invitation{incomingInvites.length === 1 ? '' : 's'}</strong><span>Waiting for your response</span></div>
