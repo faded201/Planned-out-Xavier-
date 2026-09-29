@@ -13,6 +13,7 @@ import { BillingSettings } from '@/components/billing-settings';
 import { usePremiumExperience } from '@/components/premium-experience';
 import { LivingLayoutPicker } from '@/components/living-layout-picker';
 import { LivingLayoutStage } from '@/components/living-layout-stage';
+import { PremiumChrome } from '@/components/premium-chrome';
 import type { XavierPhase } from '@/components/xavier-orb';
 import { disablePushNotifications, enablePushNotifications, registerPushWorker } from '@/lib/push';
 import {
@@ -896,6 +897,7 @@ export function UltimatePlanner() {
   const activeTaskCount = state.tasks.filter((task) => task.status !== 'done').length;
   const dueTodayCount = state.tasks.filter((task) => task.status !== 'done' && (task.dueDate === livingTodayKey || task.startDate === livingTodayKey)).length;
   return <div className={shellClass}>
+    {entitlement.premiumUi && <PremiumChrome layout={livingLayout} phase={xavierPhase} />}
     {mobileOpen && <button className="overlay" aria-label="Close menu" onClick={() => setMobileOpen(false)} />}
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="brand"><div className="mark">X</div><div><strong>Xavier Planner <span>OS</span></strong><small>Ultimate Life Operating System</small></div></div>
