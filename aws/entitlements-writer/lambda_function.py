@@ -10,9 +10,14 @@ TABLE_NAME = os.environ.get(
     "ENTITLEMENTS_TABLE",
     "PlannedOut-Xavier-Entitlements"
 )
+AUDIT_TABLE_NAME = os.environ.get(
+    "AUDIT_TABLE",
+    "PlannedOut-Membership-Audit"
+)
 
 dynamodb = boto3.resource("dynamodb", region_name=REGION)
 table = dynamodb.Table(TABLE_NAME)
+audit_table = dynamodb.Table(AUDIT_TABLE_NAME)
 
 VALID_PLANS = {"free", "pro", "business"}
 VALID_STATUSES = {
@@ -166,6 +171,25 @@ def lambda_handler(event, context):
             ExpressionAttributeNames=names,
             ExpressionAttributeValues=values
         )
+
+        # Owner/admin mutations are also recorded append-only for traceability.
+        if updated_by:
+            audit_item = {
+                "event_id": event_id,
+                "event_created": event_created,
+                "actor_id": updated_by,
+                "user_id": user_id,
+                "plan": plan,
+                "status": status,
+                "permanent": permanent,
+                "updated_at": now
+            }
+            if expires_at:
+                audit_item["expires_at"] = expires_at
+            audit_table.put_item(
+                Item=audit_item,
+                ConditionExpression="attribute_not_exists(event_id)"
+            )
 
         return response(
             200,

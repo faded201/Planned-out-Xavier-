@@ -2,6 +2,7 @@ import json
 import boto3
 import os
 import re
+import uuid
 from datetime import datetime, timezone, timedelta
 from boto3.dynamodb.conditions import Attr
 from botocore.config import Config
@@ -172,10 +173,14 @@ def handle_admin_membership(event, actor_id):
         body = json.loads(body)
     if not isinstance(body, dict):
         return api_response(400, {"error": "Invalid request"})
-    target = str(body.get("userId", ""))
+    target = str(body.get("userId", "")).strip()
     plan = str(body.get("plan", "")).lower()
     permanent = body.get("permanent") is True
-    if not re.fullmatch(r"[0-9a-fA-F-]{36}", target) or plan not in PLAN_LIMITS:
+    try:
+        target = str(uuid.UUID(target))
+    except (ValueError, AttributeError, TypeError):
+        return api_response(400, {"error": "Valid userId and plan are required"})
+    if plan not in PLAN_LIMITS:
         return api_response(400, {"error": "Valid userId and plan are required"})
     expires_at = None
     if plan != "free" and not permanent:
