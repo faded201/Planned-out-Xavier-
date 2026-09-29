@@ -50,7 +50,8 @@ export function MembershipAdmin({ user }: { user: User | null }) {
 
   return <div>
     <p className="reminder-help"><strong>Owner:</strong> Business / Full, permanent. Your owner access cannot be downgraded or revoked.</p>
-    <p className="reminder-help">Approve, upgrade, downgrade or revoke another member at any time. Choosing a lower plan applies the downgrade immediately.</p>
+    <p className="reminder-help">Approve, upgrade, downgrade or revoke another member at any time. Choosing a lower plan applies the access downgrade immediately.</p>
+    <p className="reminder-help">For a Stripe-paid member, changing access here does not alter the amount Stripe charges; their paid subscription should also be changed or cancelled through Stripe billing.</p>
     <div className="form-grid">
       <Field label="Member user ID"><input value={userId} onChange={(e) => setUserId(e.target.value)} placeholder="Supabase user UUID" /></Field>
       <Field label="Membership decision">

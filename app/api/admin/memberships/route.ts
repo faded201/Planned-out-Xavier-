@@ -8,8 +8,11 @@ export async function POST(request: Request) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
   const endpoint = process.env.XAVIER_AWS_API_URL;
   const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
-  if (!url || !key || !endpoint || !token) {
+  if (!url || !key || !endpoint) {
     return Response.json({ error: 'Owner service unavailable.' }, { status: 503 });
+  }
+  if (!token) {
+    return Response.json({ error: 'Sign in required.' }, { status: 401 });
   }
   const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
   const { data, error } = await sb.auth.getUser(token);
