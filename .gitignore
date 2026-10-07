@@ -9,3 +9,8 @@ __pycache__/
 .DS_Store
 supabase/.temp
 .vercel
+
+.venv-tts/
+
+__pycache__/
+*.pyc

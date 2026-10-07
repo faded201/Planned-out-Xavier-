@@ -62,6 +62,9 @@ type AssistantMessage = {
 
 const MODEL_STORAGE_KEY = 'xavier-planner-ai-model-v1';
 const VOICE_STORAGE_KEY = 'planned-out-voice-replies-v2';
+const LOCAL_TTS_URL = (process.env.NEXT_PUBLIC_TTS_SERVER_URL || '').trim().replace(/\/+$/, '');
+const LOCAL_TTS_LANGUAGE = (process.env.NEXT_PUBLIC_TTS_LANGUAGE || 'en').trim();
+const LOCAL_TTS_SPEAKER = (process.env.NEXT_PUBLIC_TTS_SPEAKER || 'xavier_warm').trim();
 
 type SpeechResult = {
   results: ArrayLike<ArrayLike<{ transcript: string; confidence?: number }>>;
@@ -184,6 +187,8 @@ export function AssistantPanel({
   const speechResumeTimer = useRef<number | null>(null);
   const speechStartWatchdog = useRef<number | null>(null);
   const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
+  const activeAudio = useRef<HTMLAudioElement | null>(null);
+  const activeAudioUrl = useRef<string | null>(null);
 
   function setPhase(next: XavierPhase) {
     setPhaseState(next);
@@ -235,6 +240,17 @@ export function AssistantPanel({
 
     activeUtterance.current = null;
 
+    if (activeAudio.current) {
+      activeAudio.current.pause();
+      activeAudio.current.src = '';
+      activeAudio.current = null;
+    }
+
+    if (activeAudioUrl.current) {
+      URL.revokeObjectURL(activeAudioUrl.current);
+      activeAudioUrl.current = null;
+    }
+
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
@@ -249,11 +265,69 @@ export function AssistantPanel({
     window.speechSynthesis.resume();
   }
 
-  function speak(reply: string, force = false, directTest = false) {
-    if ((!voiceRepliesRef.current && !force) || !('speechSynthesis' in window)) {
-      if (force && !('speechSynthesis' in window)) {
-        setVoiceError('Spoken replies are not supported by this browser.');
-      }
+  function speak(reply: string, force = false, directTest = false, skipLocalTts = false) {
+    if (!voiceRepliesRef.current && !force) return;
+
+    if (LOCAL_TTS_URL && !skipLocalTts) {
+      stopSpeaking(false);
+      setVoiceError('');
+      setPhase('speaking');
+      const generation = speechGeneration.current;
+
+      void (async () => {
+        try {
+          const response = await fetch(`${LOCAL_TTS_URL}/synthesize`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              text: reply,
+              language: LOCAL_TTS_LANGUAGE,
+              speaker: LOCAL_TTS_SPEAKER,
+            }),
+          });
+
+          if (!response.ok) {
+            const detail = await response.text().catch(() => '');
+            throw new Error(`Local TTS returned ${response.status}${detail ? `: ${detail}` : ''}`);
+          }
+
+          if (generation !== speechGeneration.current) return;
+
+          const blob = await response.blob();
+          const objectUrl = URL.createObjectURL(blob);
+          const audio = new Audio(objectUrl);
+          activeAudio.current = audio;
+          activeAudioUrl.current = objectUrl;
+
+          audio.onended = () => {
+            if (generation !== speechGeneration.current) return;
+            activeAudio.current = null;
+            if (activeAudioUrl.current) {
+              URL.revokeObjectURL(activeAudioUrl.current);
+              activeAudioUrl.current = null;
+            }
+            setPhase('completed');
+            window.setTimeout(() => {
+              if (generation === speechGeneration.current) setPhase('dormant');
+            }, 700);
+          };
+
+          audio.onerror = () => {
+            if (generation !== speechGeneration.current) return;
+            speak(reply, force, directTest, true);
+          };
+
+          await audio.play();
+        } catch {
+          if (generation !== speechGeneration.current) return;
+          speak(reply, force, directTest, true);
+        }
+      })();
+      return;
+    }
+
+    if (!('speechSynthesis' in window)) {
+      if (force) setVoiceError('Spoken replies are not supported by this browser.');
       return;
     }
 

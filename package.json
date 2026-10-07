@@ -18,7 +18,7 @@
     "@mlc-ai/web-llm": "0.2.85",
     "@supabase/supabase-js": "2.116.0",
     "ai": "^7.0.111",
-    "next": "16.3.4",
+    "next": "16.4.0",
     "node-ical": "0.27.2",
     "react": "19.2.6",
     "react-dom": "19.2.6",
