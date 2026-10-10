@@ -16,7 +16,7 @@ export function PremiumChrome({ layout, phase }: { layout: LivingLayout; phase: 
     </div>
     <div className="scene-signature">
       <span>X / LIVING OS</span>
-      <b>{ ame}</b>
+      <b>{ name}</b>
       <em>{phase}</em>
     </div>
   </div>;
