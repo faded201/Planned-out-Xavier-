@@ -5,7 +5,7 @@ import type { XavierPhase } from '@/components/xavier-orb';
 
 export function PremiumChrome({ layout, phase }: { layout: LivingLayout; phase: XavierPhase }) {
   const name = livingLayoutOptions.find((item) => item.id === layout)?.name || 'Xavier Living OS';
-  return <div className={`premium-scene scene-${layout}`} aria-hidden="true">
+  return <div className={`premium-scene scene-${layout} xavierPhase--${phase} scene-phase-${phase}`} aria-hidden="true">
     <div className="scene-mesh" />
     <div className="scene-aura aura-a" />
     <div className="scene-aura aura-b" />
@@ -16,7 +16,7 @@ export function PremiumChrome({ layout, phase }: { layout: LivingLayout; phase: 
     </div>
     <div className="scene-signature">
       <span>X / LIVING OS</span>
-      <b>{name}</b>
+      <b>{ ame}</b>
       <em>{phase}</em>
     </div>
   </div>;
