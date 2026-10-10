@@ -1,0 +1,350 @@
+/* Xavier Living Enhancements - Phase-Specific CSS Animations */
+/* Standalone stylesheet - NOT yet imported */
+
+:root {
+  --anim-duration-fast: 200ms;
+  --anim-duration-normal: 400ms;
+  --anim-duration-slow: 600ms;
+  --anim-duration-very-slow: 1000ms;
+  --aura-opacity-base: 0.3;
+  --aura-opacity-light: 0.15;
+  --aura-opacity-heavy: 0.6;
+  --aura-color: #6c63ff;
+  --aura-color-alt: #3d8bfb;
+}
+
+/* Scene aura container */
+.scene-aura {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+/* Scene scan overlay */
+.scene-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  will-change: opacity, transform;
+}
+
+/* Premium scene base */
+.premium-scene {
+  position: relative;
+  overflow: hidden;
+}
+
+/* === Dormant Phase === */
+.premium-scene.scene-phase-dormant {
+  animation: dormantPulse var(--anim-duration-very-slow) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-dormant .scene-aura {
+  opacity: var(--aura-opacity-light);
+  background: radial-gradient(ellipse at center, var(--aura-color) 0%, transparent 70%);
+  animation: auraFadeIn var(--anim-duration-slow) ease-out forwards;
+}
+
+.premium-scene.scene-phase-dormant .scene-scan {
+  opacity: 0;
+}
+
+@keyframes dormantPulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(0.92); }
+}
+
+@keyframes auraFadeIn {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: var(--aura-opacity-light); transform: scale(1); }
+}
+
+/* === Listening Phase === */
+.premium-scene.scene-phase-listening {
+  animation: listeningBreath var(--anim-duration-slow) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-listening .scene-aura {
+  opacity: var(--aura-opacity-base);
+  background: radial-gradient(ellipse at 30% 50%, var(--aura-color-alt) 0%, transparent 60%);
+  animation: auraPulse var(--anim-duration-normal) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-listening .scene-scan {
+  opacity: 0;
+  animation: scanSweep var(--anim-duration-very-slow) linear infinite;
+}
+
+@keyframes listeningBreath {
+  0%, 100% { filter: brightness(1); transform: scale(1); }
+  50% { filter: brightness(0.96); transform: scale(1.005); }
+}
+
+@keyframes auraPulse {
+  0%, 100% { opacity: var(--aura-opacity-base); transform: scale(1); }
+  50% { opacity: calc(var(--aura-opacity-base) + 0.1); transform: scale(1.03); }
+}
+
+@keyframes scanSweep {
+  0% { transform: translateX(-100%) rotate(0deg); }
+  100% { transform: translateX(100%) rotate(0deg); }
+}
+
+/* === Understanding Phase === */
+.premium-scene.scene-phase-understanding {
+  animation: understandingShimmer var(--anim-duration-slow) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-understanding .scene-aura {
+  opacity: var(--aura-opacity-base);
+  background: radial-gradient(circle at 50% 30%, var(--aura-color) 0%, var(--aura-color-alt) 50%, transparent 70%);
+  animation: auraRotate var(--anim-duration-very-slow) linear infinite;
+}
+
+.premium-scene.scene-phase-understanding .scene-scan {
+  opacity: 0.3;
+  background: linear-gradient(90deg, transparent 40%, rgba(108, 99, 255, 0.1) 50%, transparent 60%);
+  animation: scanProgress var(--anim-duration-slow) ease-in-out infinite;
+}
+
+@keyframes understandingShimmer {
+  0%, 100% { filter: brightness(1) saturate(1); }
+  50% { filter: brightness(1.05) saturate(1.1); }
+}
+
+@keyframes auraRotate {
+  0% { transform: rotate(0deg) scale(1); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@keyframes scanProgress {
+  0% { transform: translateX(-200%); opacity: 0; }
+  50% { opacity: 0.3; }
+  100% { transform: translateX(200%); opacity: 0; }
+}
+
+/* === Planning Phase === */
+.premium-scene.scene-phase-planning {
+  animation: planningFocus var(--anim-duration-normal) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-planning .scene-aura {
+  opacity: var(--aura-opacity-light);
+  background: radial-gradient(ellipse at 50% 50%, rgba(61, 139, 251, 0.4) 0%, transparent 60%);
+  animation: auraBreathe var(--anim-duration-slow) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-planning .scene-scan {
+  opacity: 0.2;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 20px,
+    rgba(61, 139, 251, 0.05) 20px,
+    rgba(61, 139, 251, 0.05) 21px
+  );
+  animation: scanLinesScroll var(--anim-duration-slow) linear infinite;
+}
+
+@keyframes planningFocus {
+  0%, 100% { box-shadow: 0 0 0 rgba(61, 139, 251, 0); }
+  50% { box-shadow: 0 0 20px rgba(61, 139, 251, 0.15); }
+}
+
+@keyframes auraBreathe {
+  0%, 100% { opacity: var(--aura-opacity-light); transform: scale(0.98); }
+  50% { opacity: calc(var(--aura-opacity-light) + 0.15); transform: scale(1.02); }
+}
+
+@keyframes scanLinesScroll {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(21px); }
+}
+
+/* === Executing Phase === */
+.premium-scene.scene-phase-executing {
+  animation: executingEnergy var(--anim-duration-fast) linear infinite;
+}
+
+.premium-scene.scene-phase-executing .scene-aura {
+  opacity: var(--aura-opacity-heavy);
+  background: radial-gradient(ellipse at center, var(--aura-color) 0%, var(--aura-color-alt) 40%, transparent 70%);
+  animation: auraEnergy var(--anim-duration-normal) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-executing .scene-scan {
+  opacity: 0.5;
+  background: linear-gradient(180deg, transparent, rgba(108, 99, 255, 0.2), transparent);
+  animation: scanBurst var(--anim-duration-fast) ease-out infinite;
+}
+
+@keyframes executingEnergy {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-2px); }
+}
+
+@keyframes auraEnergy {
+  0%, 100% { opacity: var(--aura-opacity-heavy); transform: scale(1.05) rotate(0deg); }
+  50% { opacity: calc(var(--aura-opacity-heavy) - 0.1); transform: scale(1.1) rotate(2deg); }
+}
+
+@keyframes scanBurst {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { transform: translateY(100%); opacity: 0; }
+}
+
+/* === Speaking Phase === */
+.premium-scene.scene-phase-speaking {
+  animation: speakingWave var(--anim-duration-normal) ease-in-out infinite;
+}
+
+.premium-scene.scene-phase-speaking .scene-aura {
+  opacity: var(--aura-opacity-base);
+  background: conic-gradient(from 0deg at 50% 50%, var(--aura-color), var(--aura-color-alt), var(--aura-color));
+  animation: auraWave var(--anim-duration-slow) linear infinite;
+}
+
+.premium-scene.scene-phase-speaking .scene-scan {
+  opacity: 0.4;
+  background: radial-gradient(circle, rgba(108, 99, 255, 0.3) 0%, transparent 70%);
+  animation: scanConcentric var(--anim-duration-normal) ease-out infinite;
+}
+
+@keyframes speakingWave {
+  0%, 100% { filter: hue-rotate(0deg) brightness(1); }
+  50% { filter: hue-rotate(15deg) brightness(1.05); }
+}
+
+@keyframes auraWave {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes scanConcentric {
+  0% { transform: scale(0.5); opacity: 0.6; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/* === Completed Phase === */
+.premium-scene.scene-phase-completed {
+  animation: completedGlow var(--anim-duration-slow) ease-out forwards;
+}
+
+.premium-scene.scene-phase-completed .scene-aura {
+  opacity: var(--aura-opacity-heavy);
+  background: radial-gradient(ellipse at center, rgba(255, 215, 0, 0.5) 0%, var(--aura-color) 40%, transparent 70%);
+  animation: auraCelebrate var(--anim-duration-very-slow) ease-out forwards;
+}
+
+.premium-scene.scene-phase-completed .scene-scan {
+  opacity: 0.8;
+  background: linear-gradient(135deg, transparent 30%, rgba(255, 215, 0, 0.3) 50%, transparent 70%);
+  animation: scanComplete var(--anim-duration-normal) ease-out forwards;
+}
+
+@keyframes completedGlow {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(1.15) saturate(1.2); }
+}
+
+@keyframes auraCelebrate {
+  0% { opacity: 0; transform: scale(0.5); }
+  100% { opacity: var(--aura-opacity-heavy); transform: scale(1.2); }
+}
+
+@keyframes scanComplete {
+  0% { transform: translateX(-100%) rotate(45deg); opacity: 0; }
+  100% { transform: translateX(100%) rotate(45deg); opacity: 0.8; }
+}
+
+/* === Mobile Breakpoints === */
+@media (max-width: 768px) {
+  .premium-scene {
+    --anim-duration-fast: 100ms;
+    --anim-duration-normal: 200ms;
+    --anim-duration-slow: 300ms;
+    --anim-duration-very-slow: 500ms;
+    --aura-opacity-base: 0.15;
+    --aura-opacity-light: 0.08;
+    --aura-opacity-heavy: 0.3;
+  }
+
+  .premium-scene.scene-phase-dormant {
+    animation-duration: calc(var(--anim-duration-very-slow) * 2);
+  }
+
+  .premium-scene.scene-phase-dormant .scene-aura {
+    animation-duration: calc(var(--anim-duration-slow) * 2);
+  }
+
+  .premium-scene.scene-phase-listening .scene-aura,
+  .premium-scene.scene-phase-understanding .scene-aura,
+  .premium-scene.scene-phase-planning .scene-aura,
+  .premium-scene.scene-phase-executing .scene-aura,
+  .premium-scene.scene-phase-speaking .scene-aura,
+  .premium-scene.scene-phase-completed .scene-aura {
+    animation: none;
+    opacity: var(--aura-opacity-base);
+    transform: none;
+  }
+
+  .premium-scene.scene-phase-listening .scene-scan,
+  .premium-scene.scene-phase-understanding .scene-scan,
+  .premium-scene.scene-phase-planning .scene-scan,
+  .premium-scene.scene-phase-executing .scene-scan,
+  .premium-scene.scene-phase-speaking .scene-scan,
+  .premium-scene.scene-phase-completed .scene-scan {
+    animation: none;
+    opacity: 0.15;
+    transform: none;
+  }
+
+  .premium-scene.scene-phase-executing {
+    animation: none;
+    transform: none;
+  }
+
+  .premium-scene.scene-phase-speaking {
+    animation: none;
+    filter: none;
+  }
+}
+
+/* === Reduced Motion === */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+  }
+
+  .premium-scene.scene-phase-dormant,
+  .premium-scene.scene-phase-listening,
+  .premium-scene.scene-phase-understanding,
+  .premium-scene.scene-phase-planning,
+  .premium-scene.scene-phase-executing,
+  .premium-scene.scene-phase-speaking,
+  .premium-scene.scene-phase-completed {
+    animation: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  .scene-aura,
+  .scene-scan {
+    animation: none !important;
+    opacity: 0 !important;
+    transform: none !important;
+  }
+}
+
+/* Standalone file - not yet imported into the application */
