@@ -64,7 +64,7 @@ resource app 'Microsoft.Web/sites@2023-12-01' = {
       ftpsState: 'Disabled'
       minTlsVersion: '1.2'
       healthCheckPath: '/'
-      appCommandLine: 'node .next/standalone/server.js'
+      appCommandLine: 'node server.js'
       appSettings: [
         { name: 'NODE_ENV', value: 'production' }
         { name: 'NEXT_TELEMETRY_DISABLED', value: '1' }

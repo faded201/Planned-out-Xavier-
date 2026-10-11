@@ -6,7 +6,7 @@ This folder contains the Azure App Service path for the Planned Out web server. 
 
 - Linux Azure App Service running Node 22.
 - HTTPS-only web app with FTPS disabled.
-- Standalone Next.js startup: `node .next/standalone/server.js`.
+- Standalone Next.js startup: `node server.js`.
 - Server-only app settings for the Xavier assistant API and future cloud voice endpoint.
 - `NEXT_PUBLIC_TTS_SERVER_URL` forced empty so production never calls the Surface or LAN voice server.
 

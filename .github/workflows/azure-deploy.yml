@@ -1,0 +1,154 @@
+name: Deploy Planned Out to Azure
+
+on:
+  push:
+    branches:
+      - Main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: planned-out-xavier-production
+  cancel-in-progress: false
+
+env:
+  AZURE_CLIENT_ID: 084dca93-68a4-4a77-beb0-92771868defc
+  AZURE_TENANT_ID: 528589ce-e43f-4e59-82f7-319d7864c596
+  AZURE_SUBSCRIPTION_ID: f3f4ff2b-bd08-418e-a492-f1244e4b30e8
+  AZURE_RESOURCE_GROUP: planned-out-xavier-rg
+  AZURE_WEBAPP_NAME: planned-out-xavier
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Sign in to Azure with GitHub OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Verify target and load public build settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp show \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --query '{name:name,state:state,host:defaultHostName}' \
+            --output json
+
+          settings="$(az webapp config appsettings list \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --output json)"
+
+          get_setting() {
+            jq -r --arg name "$1" '.[] | select(.name == $name) | .value' <<<"$settings" | head -n 1
+          }
+
+          supabase_url="$(get_setting NEXT_PUBLIC_SUPABASE_URL)"
+          supabase_key="$(get_setting NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY)"
+          app_url="$(get_setting NEXT_PUBLIC_APP_URL)"
+          vapid_key="$(get_setting NEXT_PUBLIC_VAPID_PUBLIC_KEY)"
+          tts_public_url="$(get_setting NEXT_PUBLIC_TTS_SERVER_URL)"
+
+          test -n "$supabase_url"
+          test -n "$supabase_key"
+          if [ -z "$app_url" ]; then
+            app_url="https://${AZURE_WEBAPP_NAME}.azurewebsites.net"
+          fi
+
+          {
+            printf 'NEXT_PUBLIC_SUPABASE_URL=%s\n' "$supabase_url"
+            printf 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=%s\n' "$supabase_key"
+            printf 'NEXT_PUBLIC_APP_URL=%s\n' "$app_url"
+            printf 'NEXT_PUBLIC_VAPID_PUBLIC_KEY=%s\n' "$vapid_key"
+            printf 'NEXT_PUBLIC_TTS_SERVER_URL=%s\n' "$tts_public_url"
+          } >> "$GITHUB_ENV"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22.13.0'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Type-check
+        run: npm run typecheck
+
+      - name: Build standalone production app
+        run: npm run build
+
+      - name: Package standalone app
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .azure-package planned-out-azure.zip
+          mkdir -p .azure-package
+          cp -a .next/standalone/. .azure-package/
+          mkdir -p .azure-package/.next
+          cp -a .next/static .azure-package/.next/static
+          cp -a public .azure-package/public
+          test -f .azure-package/server.js
+          (cd .azure-package && zip -qr ../planned-out-azure.zip .)
+
+      - name: Deploy to Azure App Service
+        shell: bash
+        run: |
+          set -euo pipefail
+          az webapp config set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --startup-file 'node server.js' \
+            --output none
+          az webapp deploy \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --src-path planned-out-azure.zip \
+            --type zip \
+            --async false \
+            --output json
+          az webapp config appsettings set \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --settings DEPLOYED_GIT_SHA="$GITHUB_SHA" \
+            --output none
+          az webapp restart \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME"
+
+      - name: Verify live deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://${AZURE_WEBAPP_NAME}.azurewebsites.net/"
+          for attempt in $(seq 1 18); do
+            code="$(curl -L -sS -o /dev/null -w '%{http_code}' --max-time 20 "$url" || true)"
+            echo "Health attempt ${attempt}: HTTP ${code:-000}"
+            if [[ "$code" =~ ^[23][0-9][0-9]$ ]]; then
+              echo "Azure deployment is healthy at $url"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Azure app did not become healthy in time."
+          az webapp log deployment list \
+            --resource-group "$AZURE_RESOURCE_GROUP" \
+            --name "$AZURE_WEBAPP_NAME" \
+            --output table || true
+          exit 1
