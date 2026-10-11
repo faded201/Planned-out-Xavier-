@@ -1,0 +1,29 @@
+name: Azure connection test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  verify-azure-link:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: 084dca93-68a4-4a77-beb0-92771868defc
+          tenant-id: 528589ce-e43f-4e59-82f7-319d7864c596
+          subscription-id: f3f4ff2b-bd08-418e-a492-f1244e4b30e8
+
+      - name: Verify Planned Out resource group access
+        shell: bash
+        run: |
+          az account show --query '{subscription:name, subscriptionId:id, tenantId:tenantId}' -o json
+          az group show --name planned-out-xavier-rg --query '{name:name, location:location, id:id}' -o json
+          echo "Planned Out is securely linked to Azure via GitHub OIDC."
