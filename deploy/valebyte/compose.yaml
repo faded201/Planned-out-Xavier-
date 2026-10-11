@@ -1,0 +1,52 @@
+name: planned-out
+services:
+  web:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?Set the Supabase URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?Set the public Supabase key}
+        NEXT_PUBLIC_APP_URL: https://${PLANNED_OUT_DOMAIN:?Set the production domain}
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+    env_file: ../../.env.production.local
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_APP_URL: https://${PLANNED_OUT_DOMAIN}
+      # Fail closed until assistant and billing have been migrated off AWS.
+      XAVIER_AWS_API_URL: ""
+      XAVIER_AWS_TTS_URL: ""
+      NEXT_PUBLIC_TTS_SERVER_URL: ""
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+  gateway:
+    image: caddy:2-alpine
+    environment:
+      PLANNED_OUT_DOMAIN: ${PLANNED_OUT_DOMAIN:?Set the production domain}
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options: {max-size: 10m, max-file: "3"}
+volumes:
+  caddy_data:
+  caddy_config:

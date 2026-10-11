@@ -25,5 +25,6 @@ foreach ($rule in $rules) {
 }
 
 Write-Host 'Xavier LAN firewall rules installed for Private networks only.'
-Write-Host 'Allowed ports: 3000 (planner), 5173 (local XTTS).'
+Write-Host 'Allowed ports: 3000 (planner), 5173 (local voice).'
 Read-Host 'Press Enter to close'
+

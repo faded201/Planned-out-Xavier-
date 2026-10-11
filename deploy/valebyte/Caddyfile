@@ -1,0 +1,4 @@
+{$PLANNED_OUT_DOMAIN} {
+    encode zstd gzip
+    reverse_proxy web:3000
+}

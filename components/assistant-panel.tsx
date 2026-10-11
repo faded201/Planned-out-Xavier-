@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { XavierOrb, type XavierPhase } from '@/components/xavier-orb';
+import { getSupabase } from '@/lib/supabase';
+import { voiceEndpoint } from '@/lib/voice-endpoint';
 import {
   MODEL_OPTIONS,
   serverAIChat,
@@ -62,11 +64,11 @@ type AssistantMessage = {
 
 const MODEL_STORAGE_KEY = 'xavier-planner-ai-model-v1';
 const VOICE_STORAGE_KEY = 'planned-out-voice-replies-v2';
-const COSYVOICE_ENABLED = (process.env.NEXT_PUBLIC_TTS_MODE || '').trim().toLowerCase() === 'cosyvoice3';
-const LOCAL_TTS_URL = (process.env.NEXT_PUBLIC_TTS_SERVER_URL || '').trim().replace(/\/+$/, '');
-const TTS_URL = COSYVOICE_ENABLED ? '/api/tts' : LOCAL_TTS_URL;
+const TTS_ENDPOINT = voiceEndpoint(process.env.NODE_ENV, process.env.NEXT_PUBLIC_TTS_SERVER_URL);
+const CLOUD_TTS = TTS_ENDPOINT === '/api/voice';
+const PRODUCTION_VOICE = process.env.NODE_ENV === 'production';
 const LOCAL_TTS_LANGUAGE = (process.env.NEXT_PUBLIC_TTS_LANGUAGE || 'en').trim();
-const LOCAL_TTS_SPEAKER = (process.env.NEXT_PUBLIC_TTS_SPEAKER || 'xavier_warm').trim();
+const LOCAL_TTS_STYLE = (process.env.NEXT_PUBLIC_TTS_STYLE || 'You are Xavier, an intelligent personal AI assistant. Speak in a deep, calm, warm, confident, natural conversational voice with measured pacing, clear pauses between ideas, gentle warmth, subtle emotional expression, and a slightly mysterious intelligent presence. Never shout, overact, or sound like a radio announcer.').trim();
 
 type SpeechResult = {
   results: ArrayLike<ArrayLike<{ transcript: string; confidence?: number }>>;
@@ -191,6 +193,7 @@ export function AssistantPanel({
   const activeUtterance = useRef<SpeechSynthesisUtterance | null>(null);
   const activeAudio = useRef<HTMLAudioElement | null>(null);
   const activeAudioUrl = useRef<string | null>(null);
+  const activeVoiceRequest = useRef<AbortController | null>(null);
 
   function setPhase(next: XavierPhase) {
     setPhaseState(next);
@@ -229,6 +232,8 @@ export function AssistantPanel({
 
   function stopSpeaking(resetPhase = true) {
     speechGeneration.current += 1;
+    activeVoiceRequest.current?.abort();
+    activeVoiceRequest.current = null;
 
     if (speechResumeTimer.current !== null) {
       window.clearInterval(speechResumeTimer.current);
@@ -270,32 +275,63 @@ export function AssistantPanel({
   function speak(reply: string, force = false, directTest = false, skipLocalTts = false) {
     if (!voiceRepliesRef.current && !force) return;
 
-    if (TTS_URL && !skipLocalTts) {
+    if (!skipLocalTts) {
       stopSpeaking(false);
       setVoiceError('');
       setPhase('speaking');
       const generation = speechGeneration.current;
+      const controller = new AbortController();
+      activeVoiceRequest.current = controller;
+
+      const voiceFailed = () => {
+        if (generation !== speechGeneration.current) return;
+        if (PRODUCTION_VOICE) {
+          stopSpeaking();
+          setVoiceError('Xavier cloud voice is unavailable. Your reply is still available as text.');
+        } else {
+          speak(reply, force, directTest, true);
+        }
+      };
 
       void (async () => {
         try {
-          const response = await fetch(COSYVOICE_ENABLED ? TTS_URL : `${TTS_URL}/synthesize`, {
+          const client = CLOUD_TTS ? getSupabase() : null;
+          const session = client ? await client.auth.getSession() : null;
+          let token = session?.data.session?.access_token;
+          if (CLOUD_TTS && !token) throw new Error('Sign in to use Xavier voice.');
+          if (generation !== speechGeneration.current) return;
+          const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(32_000)]);
+          const makeRequest = () => fetch(TTS_ENDPOINT, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
+            headers: { 'Content-Type': 'application/json', ...(CLOUD_TTS ? { Authorization: `Bearer ${token}` } : {}) },
+            signal,
+            cache: 'no-store',
+            redirect: 'error',
+            body: JSON.stringify(CLOUD_TTS ? { text: reply } : {
               text: reply,
               language: LOCAL_TTS_LANGUAGE,
-              speaker: LOCAL_TTS_SPEAKER,
+              style: LOCAL_TTS_STYLE,
             }),
           });
+          let response = await makeRequest();
+          if (CLOUD_TTS && response.status === 401 && client) {
+            await response.body?.cancel();
+            const refreshed = await client.auth.refreshSession();
+            token = refreshed.data.session?.access_token;
+            if (!token) throw new Error('Sign in again.');
+            if (generation !== speechGeneration.current) return;
+            response = await makeRequest();
+          }
 
           if (!response.ok) {
-            const detail = await response.text().catch(() => '');
-            throw new Error(`Local TTS returned ${response.status}${detail ? `: ${detail}` : ''}`);
+            await response.body?.cancel();
+            throw new Error('Voice unavailable');
           }
 
           if (generation !== speechGeneration.current) return;
 
           const blob = await response.blob();
+          if (generation !== speechGeneration.current) return;
           const objectUrl = URL.createObjectURL(blob);
           const audio = new Audio(objectUrl);
           activeAudio.current = audio;
@@ -315,14 +351,14 @@ export function AssistantPanel({
           };
 
           audio.onerror = () => {
-            if (generation !== speechGeneration.current) return;
-            speak(reply, force, directTest, true);
+            voiceFailed();
           };
 
           await audio.play();
         } catch {
-          if (generation !== speechGeneration.current) return;
-          speak(reply, force, directTest, true);
+          voiceFailed();
+        } finally {
+          if (activeVoiceRequest.current === controller) activeVoiceRequest.current = null;
         }
       })();
       return;
