@@ -39,6 +39,12 @@ test('checkout binds all four choices to authenticated identity and rejects inva
     assert.equal((await handler.POST(new Request('https://app.test', {method: 'POST', body: '{bad'}))).status, 400);
   } finally {process.env = original;}
 });
+test('plan entitlements cap paid CosyVoice burst cost', () => {
+  assert.deepEqual(config.planEntitlements.free, { aiRequestsPerMonth: 1000, cosyVoiceRepliesPerMonth: 0, burstPerMinute: 0, browserFallback: true });
+  assert.deepEqual(config.planEntitlements.pro, { aiRequestsPerMonth: 10000, cosyVoiceRepliesPerMonth: 60, burstPerMinute: 4, browserFallback: true });
+  assert.deepEqual(config.planEntitlements.business, { aiRequestsPerMonth: 50000, cosyVoiceRepliesPerMonth: 500, burstPerMinute: 12, browserFallback: true });
+});
+
 test('plans readiness and portal reflect environment configuration', async () => {
   const original = {...process.env};
   try {
@@ -47,7 +53,11 @@ test('plans readiness and portal reflect environment configuration', async () =>
     assert.equal((await (await plans.GET()).json()).billingReady, false);
     for (const choice of config.billingChoices) process.env[choice.envKey] = 'https://buy.stripe.com/link123';
     process.env.STRIPE_CUSTOMER_PORTAL_URL = 'https://billing.stripe.com/p/login/portal123';
-    assert.equal((await (await plans.GET()).json()).billingReady, true);
+    const payload = await (await plans.GET()).json();
+    assert.equal(payload.billingReady, true);
+    assert.equal(payload.freeEntitlements.cosyVoiceRepliesPerMonth, 0);
+    assert.equal(payload.plans.find((plan) => plan.plan === 'pro').entitlements.cosyVoiceRepliesPerMonth, 60);
+    assert.equal(payload.plans.find((plan) => plan.plan === 'business').entitlements.cosyVoiceRepliesPerMonth, 500);
     const portal = route('portal', async () => ({ok: true, user: {id: 'verified-user'}}));
     assert.equal((await portal.POST(new Request('https://app.test'))).status, 200);
     delete process.env.STRIPE_CUSTOMER_PORTAL_URL;

@@ -1,5 +1,16 @@
 export type PaidPlan = 'pro' | 'business';
 export type BillingInterval = 'month' | 'year';
+export type PlanId = 'free' | PaidPlan;
+
+export type VoiceAllowance = {
+  cosyVoiceRepliesPerMonth: number;
+  burstPerMinute: number;
+  browserFallback: boolean;
+};
+
+export type PlanEntitlement = VoiceAllowance & {
+  aiRequestsPerMonth: number;
+};
 
 export type BillingChoice = {
   plan: PaidPlan;
@@ -8,6 +19,12 @@ export type BillingChoice = {
   unitAmount: number;
   currency: 'aud';
   envKey: string;
+};
+
+export const planEntitlements: Record<PlanId, PlanEntitlement> = {
+  free: { aiRequestsPerMonth: 1000, cosyVoiceRepliesPerMonth: 0, burstPerMinute: 0, browserFallback: true },
+  pro: { aiRequestsPerMonth: 10000, cosyVoiceRepliesPerMonth: 60, burstPerMinute: 4, browserFallback: true },
+  business: { aiRequestsPerMonth: 50000, cosyVoiceRepliesPerMonth: 500, burstPerMinute: 12, browserFallback: true },
 };
 
 export const billingChoices: BillingChoice[] = [

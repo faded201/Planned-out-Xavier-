@@ -30,6 +30,10 @@ The latest user-authorized Xavier/Javier recording was converted to mono 16-bit 
 
 Do not commit the private reference recording to Git. Place it in a private server path or secret-backed deployment artifact and point `XAVIER_COSYVOICE_PROMPT_WAV` at that path.
 
+## Subscription burst model
+
+The branch now defines capped paid voice allowances in `lib/billing-config.ts` and documents them in `docs/VOICE-SUBSCRIPTIONS.md`: Free gets browser/native fallback only, Pro gets 60 CosyVoice replies/month, and Business gets 500 CosyVoice replies/month. The final production voice proxy still has to enforce those limits against trusted backend entitlements before any GPU request.
+
 ## Production note
 
 This Azure App Service setup is for the Planned Out web server. CosyVoice GPU inference still needs a separate verified cloud GPU host; it must not run in production on the Surface or a LAN tunnel.
