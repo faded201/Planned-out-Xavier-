@@ -62,7 +62,9 @@ type AssistantMessage = {
 
 const MODEL_STORAGE_KEY = 'xavier-planner-ai-model-v1';
 const VOICE_STORAGE_KEY = 'planned-out-voice-replies-v2';
+const COSYVOICE_ENABLED = (process.env.NEXT_PUBLIC_TTS_MODE || '').trim().toLowerCase() === 'cosyvoice3';
 const LOCAL_TTS_URL = (process.env.NEXT_PUBLIC_TTS_SERVER_URL || '').trim().replace(/\/+$/, '');
+const TTS_URL = COSYVOICE_ENABLED ? '/api/tts' : LOCAL_TTS_URL;
 const LOCAL_TTS_LANGUAGE = (process.env.NEXT_PUBLIC_TTS_LANGUAGE || 'en').trim();
 const LOCAL_TTS_SPEAKER = (process.env.NEXT_PUBLIC_TTS_SPEAKER || 'xavier_warm').trim();
 
@@ -268,7 +270,7 @@ export function AssistantPanel({
   function speak(reply: string, force = false, directTest = false, skipLocalTts = false) {
     if (!voiceRepliesRef.current && !force) return;
 
-    if (LOCAL_TTS_URL && !skipLocalTts) {
+    if (TTS_URL && !skipLocalTts) {
       stopSpeaking(false);
       setVoiceError('');
       setPhase('speaking');
@@ -276,7 +278,7 @@ export function AssistantPanel({
 
       void (async () => {
         try {
-          const response = await fetch(`${LOCAL_TTS_URL}/synthesize`, {
+          const response = await fetch(COSYVOICE_ENABLED ? TTS_URL : `${TTS_URL}/synthesize`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -719,7 +721,7 @@ export function AssistantPanel({
           <header className="assistant-head">
             <div className="assistant-head-copy">
               <strong>Xavier AI</strong>
-              <small>Secure planner intelligence · voice ready</small>
+              <small>Secure planner intelligence Â· voice ready</small>
 
               <select
                 value={selectedModel}
@@ -751,7 +753,7 @@ export function AssistantPanel({
                 aria-pressed={voiceReplies}
                 title="Spoken replies"
               >
-                {voiceReplies ? '🔊 Talk back on' : '🔇 Talk back off'}
+                {voiceReplies ? 'ðŸ”Š Talk back on' : 'ðŸ”‡ Talk back off'}
               </button>
 
               <button
@@ -771,7 +773,7 @@ export function AssistantPanel({
                 onClick={() => setOpen(false)}
                 aria-label="Close"
               >
-                ×
+                Ã—
               </button>
             </div>
           </header>
@@ -835,7 +837,7 @@ export function AssistantPanel({
                         speak(messageText, true);
                       }}
                     >
-                      🔊 Replay voice
+                      ðŸ”Š Replay voice
                     </button>
                   )}
                 </div>
@@ -845,7 +847,7 @@ export function AssistantPanel({
             {busy && messages[messages.length - 1]?.role === 'user' && (
               <div className="assistant-msg assistant">
                 <span className="assistant-typing">
-                  {progress || 'Connecting to Xavier…'}
+                  {progress || 'Connecting to Xavierâ€¦'}
                 </span>
               </div>
             )}
@@ -860,7 +862,7 @@ export function AssistantPanel({
           >
             <input
               value={input}
-              placeholder="Ask Xavier AI to plan, reason or act…"
+              placeholder="Ask Xavier AI to plan, reason or actâ€¦"
               onChange={(event) => setInput(event.target.value)}
               onKeyDown={(event) => {
                 if (
@@ -887,7 +889,7 @@ export function AssistantPanel({
               aria-label={listening ? 'Stop listening' : 'Talk to Xavier AI'}
               aria-pressed={listening}
             >
-              {listening ? '● Listening…' : '🎙 Talk'}
+              {listening ? 'â— Listeningâ€¦' : 'ðŸŽ™ Talk'}
             </button>
           </form>
 
