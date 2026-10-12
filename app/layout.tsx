@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import './premium.css';
+import './xavier-sphere.css';
 
 export const metadata: Metadata = {
   title: 'Xavier Planner OS Ultimate',
