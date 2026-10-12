@@ -288,12 +288,14 @@ export function AssistantPanel({
 
       const voiceFailed = () => {
         if (generation !== speechGeneration.current) return;
-        if (PRODUCTION_VOICE) {
-          stopSpeaking();
-          setVoiceError('Xavier cloud voice is unavailable. Your reply is still available as text.');
-        } else {
+        if ('speechSynthesis' in window) {
           speak(reply, force, directTest, true);
+          return;
         }
+        stopSpeaking();
+        setVoiceError(PRODUCTION_VOICE
+          ? 'Xavier cloud voice is unavailable and this browser has no built-in speech engine.'
+          : 'Voice output is unavailable in this browser.');
       };
 
       void (async () => {
@@ -805,7 +807,7 @@ export function AssistantPanel({
                 onClick={() => {
                   setVoiceEnabled(true);
                   primeSpeechOutput();
-                  speak('Xavier voice is ready.', true, true);
+                  speak('Xavier voice is ready.', true, true, true);
                 }}
               >
                 Test voice
