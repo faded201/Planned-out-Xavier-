@@ -17,7 +17,7 @@ export async function POST(request: Request) {
     trustedOrigin: process.env.XAVIER_TTS_TRUSTED_ORIGIN,
     async authorize(token, signal) {
       const entitlement = await fetchBackendEntitlement(token, signal);
-      return entitlement.plan === 'pro' || entitlement.plan === 'business';
+      return entitlement.owner === true || entitlement.plan === 'pro' || entitlement.plan === 'business';
     },
     async authenticate(token, signal) {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
