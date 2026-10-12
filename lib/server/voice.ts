@@ -2,6 +2,7 @@ type Dependencies = {
   endpoint?: string;
   trustedOrigin?: string;
   authenticate: (token: string, signal: AbortSignal) => Promise<boolean>;
+  authorize?: (token: string, signal: AbortSignal) => Promise<boolean>;
   fetcher?: typeof fetch;
   timeoutMs?: number;
 };
@@ -11,6 +12,19 @@ function failure(status: number, error: string, headers: Record<string, string> 
 }
 
 class BodyLimitError extends Error {}
+
+
+export function isTrustedVoiceConfiguration(endpointValue?: string, trustedOriginValue?: string): boolean {
+  try {
+    const endpoint = new URL(endpointValue ?? '');
+    const trusted = new URL(trustedOriginValue ?? '');
+    return endpoint.origin === trusted.origin && trusted.href === `${trusted.origin}/` &&
+      endpoint.protocol === 'https:' && /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(endpoint.hostname) &&
+      !/(?:^|\.)(?:localhost|local|internal|test|invalid)$/.test(endpoint.hostname) &&
+      !endpoint.hostname.endsWith('.amazonaws.com') && endpoint.pathname === '/tts' &&
+      !endpoint.username && !endpoint.password && !endpoint.port && !endpoint.search && !endpoint.hash;
+  } catch { return false; }
+}
 
 async function boundedBody(body: ReadableStream<Uint8Array> | null, limit: number, signal: AbortSignal) {
   if (!body) return Buffer.alloc(0);
@@ -49,20 +63,18 @@ export async function handleVoice(request: Request, dependencies: Dependencies):
     return failure(signal.aborted ? 504 : 503, 'Voice sign-in verification is temporarily unavailable.');
   }
 
-  let endpoint: URL;
-  try {
-    endpoint = new URL(dependencies.endpoint ?? '');
-    // The operator must explicitly approve the remote Valebyte voice origin.
-    // Browser input never selects a destination for the user's bearer token.
-    const trusted = new URL(dependencies.trustedOrigin ?? '');
-    if (endpoint.origin !== trusted.origin || trusted.href !== `${trusted.origin}/` ||
-      endpoint.protocol !== 'https:' || !/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/.test(endpoint.hostname) ||
-      /(?:^|\.)(?:localhost|local|internal|test|invalid)$/.test(endpoint.hostname) ||
-      endpoint.hostname.endsWith('.amazonaws.com') || endpoint.pathname !== '/tts' ||
-      endpoint.username || endpoint.password || endpoint.port || endpoint.search || endpoint.hash) throw Error();
-  } catch {
+  if (dependencies.authorize) {
+    try {
+      if (!await dependencies.authorize(token, signal)) return failure(403, 'CosyVoice requires a Pro or Business plan.');
+    } catch {
+      return failure(signal.aborted ? 504 : 503, 'Voice subscription verification is temporarily unavailable.');
+    }
+  }
+
+  if (!isTrustedVoiceConfiguration(dependencies.endpoint, dependencies.trustedOrigin)) {
     return failure(503, 'Xavier cloud voice is not configured.');
   }
+  const endpoint = new URL(dependencies.endpoint!);
 
   let text: string;
   try {

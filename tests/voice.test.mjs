@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { voiceEndpoint } from '../lib/voice-endpoint.ts';
-import { handleVoice } from '../lib/server/voice.ts';
+import { handleVoice, isTrustedVoiceConfiguration } from '../lib/server/voice.ts';
 
 const endpoint = 'https://voice.plannedout.example/tts';
 const token = 'test-user-session';
@@ -31,6 +31,24 @@ test('production never selects a workstation URL, including HTTPS tunnels', () =
   }
   assert.equal(voiceEndpoint('development', 'http://localhost:5173/'), 'http://localhost:5173/synthesize');
   assert.equal(voiceEndpoint('development', ''), '/api/voice');
+});
+
+
+test('voice configuration readiness uses the same strict trusted-origin rules', () => {
+  assert.equal(isTrustedVoiceConfiguration(endpoint, new URL(endpoint).origin), true);
+  assert.equal(isTrustedVoiceConfiguration(undefined, undefined), false);
+  assert.equal(isTrustedVoiceConfiguration('http://localhost:5173/tts', 'http://localhost:5173'), false);
+  assert.equal(isTrustedVoiceConfiguration(endpoint, 'https://other.example'), false);
+});
+
+test('free subscriptions are rejected before paid cloud synthesis', async () => {
+  let calls = 0;
+  const response = await handleVoice(request(), options({
+    authorize: async () => false,
+    fetcher: async () => { calls += 1; throw new Error('must not synthesize'); },
+  }));
+  assert.equal(response.status, 403);
+  assert.equal(calls, 0);
 });
 
 test('unauthenticated requests and auth outages never reach synthesis', async () => {

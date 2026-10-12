@@ -164,10 +164,12 @@ function recognitionErrorMessage(error?: string) {
 export function AssistantPanel({
   actions,
   premium = false,
+  plan = 'free',
   onPhaseChange,
 }: {
   actions: AssistantActions;
   premium?: boolean;
+  plan?: 'free' | 'pro' | 'business';
   onPhaseChange?: (phase: XavierPhase) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -180,6 +182,7 @@ export function AssistantPanel({
   const [listening, setListening] = useState(false);
   const [voiceReplies, setVoiceReplies] = useState(true);
   const [voiceError, setVoiceError] = useState('');
+  const [cloudVoiceReady, setCloudVoiceReady] = useState(false);
   const [phase, setPhaseState] = useState<XavierPhase>('dormant');
   const brain = useXavierBrain();
 
@@ -278,7 +281,8 @@ export function AssistantPanel({
   function speak(reply: string, force = false, directTest = false, skipLocalTts = false) {
     if (!voiceRepliesRef.current && !force) return;
 
-    if (!skipLocalTts) {
+    const shouldUseCloud = !skipLocalTts && CLOUD_TTS && plan !== 'free' && cloudVoiceReady;
+    if (shouldUseCloud) {
       stopSpeaking(false);
       setVoiceError('');
       setPhase('speaking');
@@ -462,7 +466,6 @@ export function AssistantPanel({
           stopSpeaking();
         };
 
-        window.speechSynthesis.cancel();
         window.speechSynthesis.resume();
         window.speechSynthesis.speak(utterance);
 
@@ -478,7 +481,7 @@ export function AssistantPanel({
 
           setVoiceError('Xavier created the reply, but Android blocked the voice engine from starting. Tap Test voice once to unlock it.');
           stopSpeaking();
-        }, 1800);
+        }, 6000);
       };
 
       buildAndSpeak(true);
@@ -492,6 +495,19 @@ export function AssistantPanel({
     window.speechSynthesis.resume();
     speakNext();
   }
+
+  useEffect(() => {
+    let active = true;
+    if (plan === 'free' || !CLOUD_TTS) {
+      setCloudVoiceReady(false);
+      return () => { active = false; };
+    }
+    void fetch('/api/voice', { method: 'GET', cache: 'no-store' })
+      .then((response) => response.ok ? response.json() : { configured: false })
+      .then((body) => { if (active) setCloudVoiceReady(Boolean(body?.configured)); })
+      .catch(() => { if (active) setCloudVoiceReady(false); });
+    return () => { active = false; };
+  }, [plan]);
 
   useEffect(() => {
     const savedModel = window.localStorage.getItem(MODEL_STORAGE_KEY);
@@ -781,6 +797,7 @@ export function AssistantPanel({
               </select>
 
               <small title={selected.detail}>{selected.detail}</small>
+              <small>{plan !== 'free' && cloudVoiceReady ? 'Voice: CosyVoice cloud + native fallback' : 'Voice: device/native speech'}</small>
             </div>
 
             <div className="assistant-head-actions">

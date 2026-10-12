@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { fetchBackendEntitlement } from '@/lib/server/backend-entitlement';
 
 function escapeHtml(value: unknown) {
   return String(value ?? '').replace(/[&<>'\"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '\"': '&quot;' }[char] || char));
@@ -22,12 +23,21 @@ export async function POST(request: Request) {
   const { data: identity, error: authError } = await sb.auth.getUser(token);
   if (authError || !identity.user) return Response.json({ error: 'Sign in again before sending invoices.' }, { status: 401 });
 
+  let entitlement;
+  try {
+    entitlement = await fetchBackendEntitlement(token, AbortSignal.timeout(8_000));
+  } catch {
+    return Response.json({ error: 'Subscription verification is temporarily unavailable.' }, { status: 503 });
+  }
+  if (entitlement.plan === 'free') return Response.json({ error: 'Invoice sending requires a Pro or Business plan.' }, { status: 403 });
+
   const body = await request.json().catch(() => ({}));
   const invoice = body?.invoice;
   const data = invoice?.data || {};
   const recipient = String(data.recipientEmail || '').trim();
   if (!invoice || invoice.module !== 'invoice' || !invoice.title || !recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) return Response.json({ error: 'A valid stored invoice and recipient email are required.' }, { status: 400 });
   if (String(invoice.title).length > 120 || String(invoice.body || '').length > 4000) return Response.json({ error: 'Invoice content is too large.' }, { status: 400 });
+  if (data.ndis && entitlement.plan !== 'business') return Response.json({ error: 'NDIS invoicing requires a Business plan.' }, { status: 403 });
 
   const subject = `Invoice ${String(invoice.title).slice(0, 120)} from ${String(data.businessName || 'Planned Out').slice(0, 120)}`;
   const ndisBlock = data.ndis ? `<p><strong>NDIS number:</strong> ${escapeHtml(data.ndisNumber)}<br/><strong>Support item:</strong> ${escapeHtml(data.supportItem)}<br/><strong>Claim type:</strong> ${escapeHtml(data.claimType)}<br/><strong>Support category:</strong> ${escapeHtml(data.supportCategory)}</p>` : '';

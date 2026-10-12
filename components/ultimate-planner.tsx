@@ -30,6 +30,7 @@ import {
   undoPlannerAction,
   type PlannerAction,
 } from '@/lib/planner-actions';
+import { canUsePaidModule, minimumPlanForModule } from '@/lib/plan-access';
 import { plannerLevels, type AppState, type AppView, type ModuleName, type ModuleRecord, type PlannerFile, type PlannerLevel, type PlannerTask, type Priority, type Status, type VisualPreset } from '@/lib/types';
 
 const LEGACY_STORAGE_KEY = 'xavier-planner-os-ultimate-v2';
@@ -501,6 +502,7 @@ export function UltimatePlanner() {
   function openRecord(module: ModuleName) { setRecordForm(blankRecord(module)); setRecordModal(module); }
   async function submitRecord(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!canUsePaidModule(entitlement.plan, recordForm.module)) { const required = minimumPlanForModule(recordForm.module); return alert(`${required === 'business' ? 'Business' : 'Pro'} plan required for this feature.`); }
     const record = { ...recordForm, title: recordForm.title.trim(), updatedAt: now() };
     if (!record.title) return;
     mutate((current) => ({ ...current, records: [record, ...current.records] }));
@@ -509,6 +511,7 @@ export function UltimatePlanner() {
   }
 
   async function upsertLifeBusinessRecord(record: ModuleRecord) {
+    if (!canUsePaidModule(entitlement.plan, record.module)) { const required = minimumPlanForModule(record.module); alert(`${required === 'business' ? 'Business' : 'Pro'} plan required for this feature.`); return; }
     const clean = { ...record, updatedAt: now() };
     mutate((current) => ({ ...current, records: [clean, ...current.records.filter((item) => item.id !== clean.id)] }));
     await saveRecordToCloud(clean);
@@ -886,6 +889,7 @@ export function UltimatePlanner() {
   }
 
   function assistantCreateRecord(module: ModuleName, title: string, body?: string) {
+    if (!canUsePaidModule(entitlement.plan, module)) { const required = minimumPlanForModule(module); alert(`${required === 'business' ? 'Business' : 'Pro'} plan required for ${moduleTitle(module)}.`); return; }
     const record = { ...blankRecord(module), title, body: body || '' };
     mutate((current) => ({ ...current, records: [record, ...current.records] }));
     void saveRecordToCloud(record);
@@ -948,7 +952,7 @@ export function UltimatePlanner() {
         onOpenTask={setSelectedTaskId}
         onInstallTemplate={installTemplate}
       />}
-      {view === 'life' && <LifeBusinessOS records={state.records} user={user} onSave={upsertLifeBusinessRecord} onRequestSignIn={() => setShowAuth(true)} onNotice={alert} />}
+      {view === 'life' && <LifeBusinessOS records={state.records} user={user} plan={entitlement.plan} onSave={upsertLifeBusinessRecord} onRequestSignIn={() => setShowAuth(true)} onNotice={alert} />}
       {view === 'planner' && <PlannerView tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTaskId} onNew={openTask} onEdit={editTask} onToggle={toggleTask} onDelete={deleteTask} />}
       {view === 'calendar' && <CollaborativeCalendar user={user} tasks={filteredTasks} premium={entitlement.premiumUi} livingLayout={livingLayout} onSelectTask={setSelectedTaskId} onCreateTask={() => openTask('daily')} onRequestSignIn={() => setShowAuth(true)} />}
       {view === 'board' && <BoardView tasks={filteredTasks} onSelect={setSelectedTaskId} onMove={toggleTask} />}
@@ -973,7 +977,7 @@ export function UltimatePlanner() {
       openTask: assistantOpenTask,
       setTheme: (theme) => mutate((current) => ({ ...current, theme: theme as AppState['theme'] })),
       remember: assistantRemember
-    }} premium={entitlement.premiumUi} onPhaseChange={setXavierPhase} />
+    }} premium={entitlement.premiumUi} plan={entitlement.plan} onPhaseChange={setXavierPhase} />
   </div>;
 }
 

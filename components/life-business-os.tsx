@@ -5,6 +5,7 @@ import type { User } from '@supabase/supabase-js';
 import { getSupabase } from '@/lib/supabase';
 import { crmCategories, crmPresets } from '@/lib/crm-presets';
 import type { ModuleName, ModuleRecord } from '@/lib/types';
+import { planAccess, type AppPlan } from '@/lib/plan-access';
 
 type Tab = 'overview' | 'tax' | 'invoices' | 'crm' | 'ndis';
 type DataMap = Record<string, string | number | boolean>;
@@ -12,6 +13,7 @@ type DataMap = Record<string, string | number | boolean>;
 type Props = {
   records: ModuleRecord[];
   user: User | null;
+  plan: AppPlan;
   onSave: (record: ModuleRecord) => Promise<void>;
   onRequestSignIn: () => void;
   onNotice: (message: string) => void;
@@ -35,7 +37,8 @@ function escapeHtml(value: unknown) {
   return String(value ?? '').replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char] || char));
 }
 
-export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotice }: Props) {
+export function LifeBusinessOS({ records, user, plan, onSave, onRequestSignIn, onNotice }: Props) {
+  const access = planAccess[plan];
   const [tab, setTab] = useState<Tab>('overview');
   const [taxType, setTaxType] = useState('expense');
   const [taxTitle, setTaxTitle] = useState('');
@@ -82,8 +85,21 @@ export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotic
   const activeSchema = schemas.find((item) => item.id === activeSchemaId);
   const activeFields = activeSchema ? parseList(activeSchema.data.fieldsJson) : preset.fields;
 
+  function openTab(next: Tab) {
+    const required = next === 'tax' || next === 'invoices' ? 'Pro' : next === 'crm' || next === 'ndis' ? 'Business' : null;
+    const allowed = next === 'overview' || (next === 'tax' && access.tax) || (next === 'invoices' && access.invoices) ||
+      (next === 'crm' && access.crm) || (next === 'ndis' && access.ndis);
+    if (!allowed) {
+      onNotice(`${required} plan required for ${next === 'crm' ? 'CRM Universe' : next === 'ndis' ? 'NDIS Provider OS' : next === 'tax' ? 'Tax Centre' : 'Invoice Studio'}.`);
+      return;
+    }
+    setTab(next);
+  }
+
+
   async function saveTax(event: React.FormEvent) {
     event.preventDefault();
+    if (!access.tax) return onNotice('Tax Centre requires a Pro or Business plan.');
     const amount = Number(taxAmount);
     if (!taxTitle.trim() || !Number.isFinite(amount) || amount <= 0) return onNotice('Add a description and valid tax amount.');
     const item = record('tax', taxTitle.trim(), taxNotes.trim(), { type: taxType, financialYear: taxYear, category: taxCategory, gst: Number(taxGst || 0), retentionTargetYears: 5 }, amount);
@@ -98,6 +114,7 @@ export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotic
   }
 
   async function saveInvoice(status = 'draft') {
+    if (!access.invoices) { onNotice('Invoice Studio requires a Pro or Business plan.'); return null; }
     const totals = invoiceTotals();
     if (!invoice.businessName.trim() || !invoice.customer.trim() || !invoice.description.trim() || totals.total <= 0) { onNotice('Add business, customer, description and invoice amount first.'); return null; }
     if (invoice.ndis && (!invoice.ndisNumber.trim() || !invoice.supportItem.trim())) { onNotice('NDIS invoices need the participant NDIS number and support item number.'); return null; }
@@ -132,6 +149,7 @@ export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotic
   }
 
   async function createSchema() {
+    if (!access.customCrm) return onNotice('Custom CRM Builder requires a Business plan.');
     const fields = (customFields.trim() ? customFields.split(',').map((item) => item.trim()).filter(Boolean) : preset.fields);
     const stages = (customStages.trim() ? customStages.split(',').map((item) => item.trim()).filter(Boolean) : preset.pipeline);
     const name = schemaName.trim() || preset.name;
@@ -142,7 +160,7 @@ export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotic
   }
 
   async function saveCrmRecord(event: React.FormEvent) {
-    event.preventDefault(); const schema = activeSchema || null; const fields = schema ? parseList(schema.data.fieldsJson) : preset.fields;
+    event.preventDefault(); if (!access.crm) return onNotice('CRM Universe requires a Business plan.'); const schema = activeSchema || null; const fields = schema ? parseList(schema.data.fieldsJson) : preset.fields;
     const title = crmValues[fields[0]]?.trim() || crmValues.Name?.trim() || crmValues['Contact name']?.trim();
     if (!title) return onNotice(`Add ${fields[0] || 'a name'} first.`);
     const item = record('crm', title, '', { schemaId: schema?.id || preset.id, schemaName: schema?.title || preset.name, fieldsJson: JSON.stringify(crmValues) });
@@ -151,7 +169,7 @@ export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotic
   }
 
   async function saveNdis(event: React.FormEvent) {
-    event.preventDefault(); const amount = Number(ndis.quantity || 0) * Number(ndis.unitRate || 0) + Number(ndis.gst || 0);
+    event.preventDefault(); if (!access.ndis) return onNotice('NDIS Provider OS requires a Business plan.'); const amount = Number(ndis.quantity || 0) * Number(ndis.unitRate || 0) + Number(ndis.gst || 0);
     if (!ndis.participant.trim() || !ndis.ndisNumber.trim() || !ndis.supportItem.trim() || amount <= 0) return onNotice('Participant, NDIS number, support item and a valid amount are required.');
     const item = record('ndis', ndis.participant, ndis.caseNotes, { ...ndis, quantity: Number(ndis.quantity || 0), unitRate: Number(ndis.unitRate || 0), gst: Number(ndis.gst || 0) }, amount);
     item.category = ndis.supportCategory || 'NDIS support'; item.status = 'delivered';
@@ -165,11 +183,11 @@ export function LifeBusinessOS({ records, user, onSave, onRequestSignIn, onNotic
 
   return <section className="page life-business-os">
     <div className="life-os-hero"><div><p className="eyebrow">XAVIER LIFE + BUSINESS OS</p><h2>Your calendar is now connected to the rest of life.</h2><p>Tax records, invoices, CRM, NDIS operations, clients, documents and future custom workflows live beside planning and Xavier AI.</p></div><div className="life-os-badges"><span>50 CRM presets</span><span>Invoice send + store</span><span>NDIS workflow</span><span>Custom CRM builder</span></div></div>
-    <div className="life-os-tabs">{(['overview','tax','invoices','crm','ndis'] as Tab[]).map((item) => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'overview' ? 'Life HQ' : item.toUpperCase()}</button>)}</div>
+    <div className="life-os-tabs">{(['overview','tax','invoices','crm','ndis'] as Tab[]).map((item) => { const locked = (item === 'tax' && !access.tax) || (item === 'invoices' && !access.invoices) || (item === 'crm' && !access.crm) || (item === 'ndis' && !access.ndis); return <button key={item} className={`${tab === item ? 'active ' : ''}${locked ? 'locked' : ''}`} onClick={() => openTab(item)}>{item === 'overview' ? 'Life HQ' : item.toUpperCase()}{locked ? <small>{item === 'tax' || item === 'invoices' ? 'PRO' : 'BUSINESS'}</small> : null}</button>; })}</div>
 
     {tab === 'overview' && <div className="life-os-overview">
       <div className="stats"><div className="stat"><span>Tax income</span><strong>{money(income)}</strong><small>Recorded income</small></div><div className="stat"><span>Tax expenses</span><strong>{money(expenses)}</strong><small>Recorded expenses</small></div><div className="stat"><span>Unpaid invoices</span><strong>{money(unpaid)}</strong><small>{invoices.filter((item) => item.status !== 'paid').length} open</small></div><div className="stat"><span>CRM records</span><strong>{crmRecords.length}</strong><small>{schemas.length} workspaces</small></div><div className="stat"><span>NDIS records</span><strong>{ndisRecords.length}</strong><small>Delivery evidence</small></div></div>
-      <div className="life-module-grid"><button onClick={() => setTab('tax')}><b>Tax Centre</b><span>Income, expenses, GST, BAS and evidence storage.</span></button><button onClick={() => setTab('invoices')}><b>Invoice Studio</b><span>Write, store, email, print and track invoices.</span></button><button onClick={() => setTab('crm')}><b>CRM Universe</b><span>50 presets plus user-built custom CRMs.</span></button><button onClick={() => setTab('ndis')}><b>NDIS Provider OS</b><span>Participants, supports, support logs, claims and compliant invoice fields.</span></button></div>
+      <div className="life-module-grid"><button className={!access.tax ? 'locked' : ''} onClick={() => openTab('tax')}><b>Tax Centre</b><span>Income, expenses, GST, BAS and evidence storage.</span><em>{access.tax ? 'OPEN' : 'PRO'}</em></button><button className={!access.invoices ? 'locked' : ''} onClick={() => openTab('invoices')}><b>Invoice Studio</b><span>Write, store, email, print and track invoices.</span><em>{access.invoices ? 'OPEN' : 'PRO'}</em></button><button className={!access.crm ? 'locked' : ''} onClick={() => openTab('crm')}><b>CRM Universe</b><span>50 presets plus user-built custom CRMs.</span><em>{access.crm ? 'OPEN' : 'BUSINESS'}</em></button><button className={!access.ndis ? 'locked' : ''} onClick={() => openTab('ndis')}><b>NDIS Provider OS</b><span>Participants, supports, support logs, claims and compliant invoice fields.</span><em>{access.ndis ? 'OPEN' : 'BUSINESS'}</em></button></div>
       <div className="life-os-note"><b>Built for Australian business workflows.</b><span>Xavier organises records and workflow. Tax, accounting and NDIS compliance decisions should still be checked against your accountant, bookkeeper or current NDIA guidance.</span></div>
     </div>}
 

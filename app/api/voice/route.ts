@@ -1,13 +1,24 @@
 import { createClient } from '@supabase/supabase-js';
-import { handleVoice } from '@/lib/server/voice';
+import { handleVoice, isTrustedVoiceConfiguration } from '@/lib/server/voice';
+import { fetchBackendEntitlement } from '@/lib/server/backend-entitlement';
 
 export const runtime = 'nodejs';
 export const maxDuration = 35;
+
+export async function GET() {
+  return Response.json({
+    configured: isTrustedVoiceConfiguration(process.env.XAVIER_TTS_URL, process.env.XAVIER_TTS_TRUSTED_ORIGIN),
+  }, { headers: { 'Cache-Control': 'private, no-store' } });
+}
 
 export async function POST(request: Request) {
   return handleVoice(request, {
     endpoint: process.env.XAVIER_TTS_URL,
     trustedOrigin: process.env.XAVIER_TTS_TRUSTED_ORIGIN,
+    async authorize(token, signal) {
+      const entitlement = await fetchBackendEntitlement(token, signal);
+      return entitlement.plan === 'pro' || entitlement.plan === 'business';
+    },
     async authenticate(token, signal) {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;

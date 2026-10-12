@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { crmPresets } from '../lib/crm-presets.ts';
-import { POST as sendInvoice } from '../app/api/invoices/send/route.ts';
+import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
+import ts from 'typescript';
 
 test('life and business OS ships 50 unique CRM presets including NDIS and custom builder', () => {
   assert.equal(crmPresets.length, 50);
@@ -14,19 +16,28 @@ test('life and business OS ships 50 unique CRM presets including NDIS and custom
 
 test('invoice email route fails closed before delivery when the caller is not signed in', async () => {
   const original = { ...process.env };
-  const originalFetch = globalThis.fetch;
   let fetched = false;
   try {
     process.env.RESEND_API_KEY = 'test-only-key';
     process.env.INVITE_EMAIL_FROM = 'billing@example.test';
     process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://example.supabase.co';
     process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY = 'test-public-key';
-    globalThis.fetch = async () => { fetched = true; throw new Error('network should not be reached'); };
-    const response = await sendInvoice(new Request('https://app.test/api/invoices/send', { method: 'POST', body: '{}' }));
+    const source = readFileSync(new URL('../app/api/invoices/send/route.ts', import.meta.url), 'utf8');
+    const exports = {};
+    vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, {
+      exports,
+      require: (id) => id === '@supabase/supabase-js'
+        ? { createClient: () => ({ auth: { getUser: async () => ({ data: {}, error: null }) } }) }
+        : id === '@/lib/server/backend-entitlement'
+          ? { fetchBackendEntitlement: async () => ({ plan: 'free' }) }
+          : (() => { throw new Error(`Unexpected import: ${id}`); })(),
+      Response, Request, Intl, AbortSignal, process,
+      fetch: async () => { fetched = true; throw new Error('network should not be reached'); },
+    });
+    const response = await exports.POST(new Request('https://app.test/api/invoices/send', { method: 'POST', body: '{}' }));
     assert.equal(response.status, 401);
     assert.equal(fetched, false);
   } finally {
     process.env = original;
-    globalThis.fetch = originalFetch;
   }
 });
