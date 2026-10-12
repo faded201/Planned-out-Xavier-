@@ -32,7 +32,7 @@ async function freeVisionFallback(question:string, images:VisionImageInput[], co
   try { return await serverVisionChat(question, images, context, history, onProgress); }
   catch (error) {
     const message=error instanceof Error?error.message:'';
-    if (!/not deployed|not configured|vision model|vision gateway|503|unavailable/i.test(message)) throw error;
+    if (!/Pro and Business subscribers|free vision/i.test(message)) throw error;
     onProgress('Using free on-device text recognition.');
     const { createWorker } = await import('tesseract.js');
     const worker=await createWorker('eng');

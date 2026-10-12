@@ -100,17 +100,14 @@ function buildPayload(body: Record<string, unknown>, model: string) {
   }
 
   const images = Array.isArray(body.images)
-    ? body.images.map((item) => record(item) ? validateImage(item.dataUrl ?? item.url ?? item.image) : '').filter(Boolean)
+    ? body.images.map((item) => record(item) ? validateImage(item.dataUrl ?? item.url ?? item.image) : validateImage(item))
     : [validateImage(body.image)];
   if (images.length < 1 || images.length > MAX_IMAGES) {
     throw new VisionBodyError(400, `Attach one to ${MAX_IMAGES} supported images.`);
   }
 
   const promptSource = typeof body.prompt === 'string' ? body.prompt : typeof body.question === 'string' ? body.question : '';
-  const prompt = promptSource.trim() || DEFAULT_PROMPT;
-  if (prompt.length > MAX_PROMPT_CHARS) {
-    throw new VisionBodyError(413, `Vision prompt must be ${MAX_PROMPT_CHARS} characters or fewer.`);
-  }
+  const prompt = (promptSource.trim() || DEFAULT_PROMPT).slice(0, MAX_PROMPT_CHARS);
   const detail = body.detail === 'low' || body.detail === 'high' ? body.detail : 'auto';
   const maxTokens = Number.isInteger(body.maxTokens) ? Number(body.maxTokens) : 500;
   if (maxTokens < 64 || maxTokens > 900) throw new VisionBodyError(400, 'maxTokens must be between 64 and 900.');
