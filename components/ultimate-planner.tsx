@@ -80,10 +80,10 @@ const modules: Array<{ module: ModuleName; title: string; icon: string; descript
   { module: 'automation', title: 'Automation Lab', icon: '⚡', description: 'Workflow rules, reminders, review cycles, project checks and smart nudges.', fields: ['trigger', 'action', 'frequency'] },
   { module: 'risk', title: 'Risk Register', icon: '⚠', description: 'Risks, issues, blockers, dependencies, owners and mitigation plans.', fields: ['impact', 'likelihood', 'mitigation'] },
   { module: 'subscription', title: 'Subscription Watch', icon: '◌', description: 'Subscriptions, renewals, cancellations, trial endings and budget forecasting.', fields: ['amount', 'renews', 'cancelLink'] },
-  { module: 'tax', title: 'Tax Centre', icon: '?', description: 'Australian business income, expenses, GST, BAS records and evidence references.', fields: ['financialYear', 'type', 'gst'] },
-  { module: 'invoice', title: 'Invoice Studio', icon: '?', description: 'Write, send, print and store invoices, including NDIS invoice fields.', fields: ['customer', 'dueDate', 'status'] },
-  { module: 'crm', title: 'CRM Universe', icon: '?', description: 'Fifty business CRM presets plus custom user-built workspaces.', fields: ['schema', 'pipeline', 'owner'] },
-  { module: 'ndis', title: 'NDIS Provider OS', icon: '?', description: 'Participants, supports, service evidence, claims and provider records.', fields: ['ndisNumber', 'supportItem', 'claimType'] }
+  { module: 'tax', title: 'Tax Centre', icon: 'TAX', description: 'Australian business income, expenses, GST, BAS records and evidence references.', fields: ['financialYear', 'type', 'gst'] },
+  { module: 'invoice', title: 'Invoice Studio', icon: 'INV', description: 'Write, send, print and store invoices, including NDIS invoice fields.', fields: ['customer', 'dueDate', 'status'] },
+  { module: 'crm', title: 'CRM Universe', icon: 'CRM', description: 'Fifty business CRM presets plus custom user-built workspaces.', fields: ['schema', 'pipeline', 'owner'] },
+  { module: 'ndis', title: 'NDIS Provider OS', icon: 'NDIS', description: 'Participants, supports, service evidence, claims and provider records.', fields: ['ndisNumber', 'supportItem', 'claimType'] }
 ];
 
 const templates = [
