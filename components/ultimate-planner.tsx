@@ -922,6 +922,7 @@ export function UltimatePlanner() {
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="brand"><div className="mark">X</div><div><strong>Xavier Planner <span>OS</span></strong><small>Ultimate Life Operating System</small></div></div>
       <button className="quick" onClick={() => openTask('daily')}>+ Quick task</button>
+      <a className="xavier-ai-nav" href="/xavier"><span>◉</span><strong>Xavier AI</strong><small>Chat · voice · vision</small></a>
       <nav>{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => { setView(item.id); setMobileOpen(false); }}><span>{item.icon}</span>{item.label}</button>)}</nav>
       <div className="sync-card"><strong>{user ? 'Cloud synced' : 'Device mode'}</strong><small>{user?.email || 'Sign in for Supabase sync + vault files'}</small><button onClick={() => setShowAuth(true)}>{user ? 'Account' : 'Sign in'}</button></div>
     </aside>

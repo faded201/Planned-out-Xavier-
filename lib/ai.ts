@@ -161,6 +161,43 @@ export async function serverAIChat(
   return result;
 }
 
+export type VisionImageInput = { name: string; dataUrl: string; source: 'camera' | 'image' };
+export type ServerVisionResult = ServerAIResult & { observation: string; confidence?: number };
+
+export async function serverVisionChat(
+  question: string,
+  images: VisionImageInput[],
+  context: unknown,
+  history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  onProgress: (message: string) => void,
+): Promise<ServerVisionResult> {
+  const supabase = getSupabase();
+  if (!supabase) throw new Error('Sign in to Planned Out to use Xavier Vision.');
+  if (!images.length) throw new Error('Give Xavier an image to inspect.');
+  const session = await supabase.auth.getSession();
+  let accessToken = session.data.session?.access_token || null;
+  if (!accessToken) throw new Error('Your Planned Out session has expired. Sign in again.');
+  const payload = JSON.stringify({ question: question.slice(0, 4000), images: images.slice(0, 3), context, history: history.slice(-10) });
+  onProgress('Xavier is looking...');
+  const makeRequest = (token: string) => fetch('/api/vision', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: payload, cache: 'no-store', signal: AbortSignal.timeout(60_000),
+  });
+  let response = await makeRequest(accessToken);
+  if (response.status === 401) {
+    const refreshed = await supabase.auth.refreshSession();
+    accessToken = refreshed.data.session?.access_token || null;
+    if (!accessToken) throw new Error('Your Planned Out session has expired. Sign in again.');
+    response = await makeRequest(accessToken);
+  }
+  const data = await response.json().catch(() => ({})) as { observation?: string; text?: string; model?: string; provider?: string; confidence?: number; error?: string };
+  if (!response.ok) throw new Error(data.error || `Vision request failed with status ${response.status}.`);
+  const observation = String(data.observation || data.text || '').trim();
+  if (!observation) throw new Error('Xavier Vision returned an empty observation.');
+  onProgress(data.model ? `Vision: ${data.model}` : 'Scene understood');
+  return { text: observation, observation, model: data.model, provider: data.provider, confidence: data.confidence };
+}
+
 // Backwards-compatible export for any older component code.
 export async function localQwenChat(
   prompt: string,

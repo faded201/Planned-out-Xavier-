@@ -8,9 +8,18 @@ export type XavierAffect = {
   satisfaction: number; uncertainty: number; cognitiveLoad: number; socialWarmth: number;
 };
 export type XavierEpisode = { id: string; at: string; input: string; outcome: string; success: boolean; lesson: string };
+export type XavierPerception = {
+  id: string;
+  at: string;
+  modality: 'vision';
+  source: 'camera' | 'image';
+  summary: string;
+  question?: string;
+  confidence?: number;
+};
 export type XavierBrainState = {
   heartbeat: number; focus: string; prediction: string; reflection: string;
-  affect: XavierAffect; workingMemory: string[]; episodes: XavierEpisode[];
+  affect: XavierAffect; workingMemory: string[]; episodes: XavierEpisode[]; perceptions: XavierPerception[];
   goals: Array<{ id: string; label: string; priority: number }>;
   updatedAt: string;
 };
@@ -21,7 +30,7 @@ const baseState = (): XavierBrainState => ({
   heartbeat: 0, focus: 'maintain continuity', prediction: 'waiting for meaningful change',
   reflection: 'I am monitoring context and maintaining a coherent working state.',
   affect: { confidence: .72, curiosity: .64, urgency: .12, concern: .08, satisfaction: .5, uncertainty: .28, cognitiveLoad: .18, socialWarmth: .72 },
-  workingMemory: [], episodes: [],
+  workingMemory: [], episodes: [], perceptions: [],
   goals: [
     { id: 'help', label: 'help the user make real progress', priority: 1 },
     { id: 'truth', label: 'preserve truth and uncertainty', priority: .98 },
@@ -48,8 +57,21 @@ export function useXavierBrain() {
     try {
       const saved = localStorage.getItem(KEY);
       if (saved) {
-        const parsed = JSON.parse(saved) as XavierBrainState;
-        if (parsed?.affect && Array.isArray(parsed.episodes)) { ref.current = parsed; setState(parsed); }
+        const parsed = JSON.parse(saved) as Partial<XavierBrainState>;
+        if (parsed?.affect && Array.isArray(parsed.episodes)) {
+          const base = baseState();
+          const hydrated: XavierBrainState = {
+            ...base,
+            ...parsed,
+            affect: { ...base.affect, ...parsed.affect },
+            workingMemory: Array.isArray(parsed.workingMemory) ? parsed.workingMemory : [],
+            episodes: parsed.episodes,
+            perceptions: Array.isArray(parsed.perceptions) ? parsed.perceptions : [],
+            goals: Array.isArray(parsed.goals) ? parsed.goals : base.goals,
+          };
+          ref.current = hydrated;
+          setState(hydrated);
+        }
       }
     } catch {}
     const timer = window.setInterval(() => commit((current) => ({
@@ -75,6 +97,34 @@ export function useXavierBrain() {
       prediction: 'evaluate intent, retrieve relevant memory, compare actions, then respond',
       workingMemory: [input.slice(0, 360), ...current.workingMemory].slice(0, 7),
       affect: { ...current.affect, urgency: clamp(current.affect.urgency + urgent), curiosity: clamp(current.affect.curiosity + novel), cognitiveLoad: clamp(current.affect.cognitiveLoad + .24), uncertainty: clamp(current.affect.uncertainty + .04) },
+    };
+  }), [commit]);
+
+  const perceiveVisual = useCallback((summary: string, source: 'camera' | 'image', question?: string, confidence?: number) => commit((current) => {
+    const clean = summary.trim().slice(0, 1200);
+    if (!clean) return current;
+    const perception: XavierPerception = {
+      id: crypto.randomUUID(),
+      at: new Date().toISOString(),
+      modality: 'vision',
+      source,
+      summary: clean,
+      question: question?.trim().slice(0, 500),
+      confidence: confidence === undefined ? undefined : clamp(confidence),
+    };
+    return {
+      ...current,
+      focus: `Visual perception: ${clean.slice(0, 180)}`,
+      prediction: 'compare the visual scene with memory, goals and the user request before acting',
+      reflection: `A new ${source === 'camera' ? 'camera' : 'image'} observation entered working memory.`,
+      workingMemory: [`VISION: ${clean.slice(0, 360)}`, ...current.workingMemory].slice(0, 7),
+      perceptions: [perception, ...(current.perceptions || [])].slice(0, 30),
+      affect: {
+        ...current.affect,
+        curiosity: clamp(current.affect.curiosity + .08),
+        cognitiveLoad: clamp(current.affect.cognitiveLoad + .16),
+        uncertainty: clamp(current.affect.uncertainty + (confidence === undefined ? .03 : (1 - clamp(confidence)) * .08)),
+      },
     };
   }), [commit]);
 
@@ -104,11 +154,12 @@ export function useXavierBrain() {
       activeGoals: current.goals,
       workingMemory: current.workingMemory.slice(0, 5),
       recentEpisodes: current.episodes.slice(0, 6),
+      recentPerceptions: (current.perceptions || []).slice(0, 6),
       heartbeat: current.heartbeat,
     };
   }, []);
 
-  return { state, perceive, transition, integrate, contextForModel };
+  return { state, perceive, perceiveVisual, transition, integrate, contextForModel };
 }
 
 export function useXavierBrainSignal() {
