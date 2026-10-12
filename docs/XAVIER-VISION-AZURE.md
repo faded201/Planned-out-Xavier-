@@ -52,3 +52,29 @@ The route rejects oversized request bodies, unsupported fields, invalid URLs, an
 ## Rollback
 
 Blank `XAVIER_VISION_API_URL` and `XAVIER_VISION_API_KEY`. Xavier text and voice routes continue to work; `/api/vision` will return a safe 503 instead of calling Azure.
+
+## Provisioning Status - 2026-10-12
+
+Created resource:
+
+- Resource group: `planned-out-xavier-rg`
+- Foundry-capable account: `planned-out-xavier-foundry-jh`
+- Kind: `AIServices`
+- SKU: `S0`
+- Region: `australiaeast`
+- Endpoint: `https://planned-out-xavier-foundry-jh.cognitiveservices.azure.com/`
+
+Safety controls:
+
+- Budget: `Planned-Out-Azure-Safety`
+- Amount: `25.0` in the subscription billing currency
+- Alerts: 50%, 80%, and 100% actual spend to `jameshapurona@gmail.com`
+- Current spend reported by CLI: `0.0`
+
+Availability result:
+
+- The `AIServices` account lists Qwen text/fine-tuning models, but not Qwen3-VL.
+- West US 3 instant-access discovery also lists Qwen text/fine-tuning models, but not Qwen3-VL for this subscription.
+- Retail pricing exposes Qwen3 32B/fine-tune meters, but no exact Qwen3-VL 2B/8B meter was returned by the Azure Retail Prices API.
+
+Do not create a managed compute Qwen3-VL endpoint until Azure exposes the exact Qwen3-VL price/terms for this subscription or the Foundry portal confirms them at deployment time.
