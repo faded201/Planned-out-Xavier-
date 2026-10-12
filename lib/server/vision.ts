@@ -1,104 +1,217 @@
 type VisionDependencies = {
-  authenticate: (token: string, signal: AbortSignal) => Promise<boolean>;
   endpoint?: string;
   apiKey?: string;
   model?: string;
-  gateway?: string;
+  authenticate: (token: string, signal: AbortSignal) => Promise<boolean>;
   fetcher?: typeof fetch;
   timeoutMs?: number;
+  log?: (event: string, fields: { status: number; requestId?: string }) => void;
 };
 
-type VisionImage = { name?: string; dataUrl?: string; source?: 'camera' | 'image' };
-type HistoryItem = { role?: string; content?: string };
-type VisionBody = { question?: string; images?: VisionImage[]; context?: unknown; history?: HistoryItem[] };
-
-const MAX_IMAGE_CHARS = 1_900_000;
+const MAX_BODY_BYTES = 5_100_000;
+const MAX_PROMPT_CHARS = 1_200;
+const MAX_IMAGE_DATA_URL_CHARS = 1_000_000;
 const MAX_IMAGES = 3;
-const MAX_TOTAL_IMAGE_CHARS = 4_800_000;
-const IMAGE_RE = /^data:image\/(?:jpeg|jpg|png|webp);base64,[A-Za-z0-9+/=]+$/;
+const DEFAULT_MODEL = 'Qwen/Qwen3-VL-2B-Instruct';
+const DEFAULT_PROMPT = 'Describe this image clearly for Xavier inside Planned Out. Focus on useful details, visible text, objects, people, context and anything that may affect planning.';
 
-function json(body: unknown, status: number) {
-  return Response.json(body, { status, headers: { 'Cache-Control': 'private, no-store' } });
-}
-function safeEndpoint(raw: string | undefined): URL | null {
-  if (!raw) return null;
-  try { const url = new URL(raw); return url.protocol === 'https:' && !url.username && !url.password && !url.hash ? url : null; } catch { return null; }
-}
-function parseBody(value: unknown) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const body = value as VisionBody;
-  const question = String(body.question || 'Describe what you see and identify anything important.').trim().slice(0, 4000);
-  if (!Array.isArray(body.images) || body.images.length < 1 || body.images.length > MAX_IMAGES) return null;
-  let total = 0;
-  const images = body.images.map((item) => {
-    const dataUrl = String(item?.dataUrl || '');
-    total += dataUrl.length;
-    if (!IMAGE_RE.test(dataUrl) || dataUrl.length > MAX_IMAGE_CHARS) throw new Error('invalid-image');
-    return { dataUrl, source: item?.source === 'camera' ? 'camera' as const : 'image' as const };
-  });
-  if (total > MAX_TOTAL_IMAGE_CHARS) return null;
-  const history = (Array.isArray(body.history) ? body.history : []).slice(-8).flatMap((item) => {
-    const role = item?.role === 'assistant' ? 'assistant' as const : item?.role === 'user' ? 'user' as const : null;
-    const content = typeof item?.content === 'string' ? item.content.slice(0, 1800) : '';
-    return role && content ? [{ role, content }] : [];
-  });
-  return { question: question || 'Describe what you see.', images, context: body.context ?? {}, history };
-}
-function extractText(payload: unknown): string {
-  if (!payload || typeof payload !== 'object') return '';
-  const body = payload as Record<string, unknown>;
-  const choices = Array.isArray(body.choices) ? body.choices : [];
-  const message = choices[0] && typeof choices[0] === 'object' ? (choices[0] as Record<string, unknown>).message : null;
-  if (message && typeof message === 'object') {
-    const content = (message as Record<string, unknown>).content;
-    if (typeof content === 'string') return content.trim();
+class VisionBodyError extends Error {
+  status: number;
+  constructor(status: number, message: string) {
+    super(message);
+    this.status = status;
   }
-  if (typeof body.output_text === 'string') return body.output_text.trim();
-  if (typeof body.text === 'string') return body.text.trim();
-  return '';
 }
 
-export async function handleVision(request: Request, deps: VisionDependencies): Promise<Response> {
-  const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
-  if (!token || token.length > 16_384) return json({ error: 'Sign in to use Xavier Vision.' }, 401);
-  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(deps.timeoutMs ?? 55_000)]);
-  try { if (!await deps.authenticate(token, signal)) return json({ error: 'Your session has expired. Please sign in again.' }, 401); }
-  catch { return json({ error: 'Sign-in verification is temporarily unavailable.' }, 503); }
+function record(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
 
-  let parsed: ReturnType<typeof parseBody>;
-  try { parsed = parseBody(await request.json()); } catch { return json({ error: 'Invalid visual input.' }, 400); }
-  if (!parsed) return json({ error: 'Attach one to three supported images under the size limit.' }, 400);
+function jsonResponse(body: unknown, status: number, headers: Record<string, string> = {}) {
+  return Response.json(body, {
+    status,
+    headers: { 'Cache-Control': 'private, no-store', ...headers },
+  });
+}
 
-  const modelEndpoint = safeEndpoint(deps.endpoint);
-  if (!modelEndpoint) {
-    const gateway = safeEndpoint(deps.gateway);
-    if (!gateway) return json({ error: 'Xavier Vision is built but its Azure vision model is not deployed yet.' }, 503);
-    const target = new URL('/api/vision', gateway);
-    try {
-      const upstream = await (deps.fetcher ?? fetch)(target, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, body: JSON.stringify(parsed), cache: 'no-store', redirect: 'error', signal });
-      const text = await upstream.text();
-      return new Response(text, { status: upstream.status, headers: { 'Content-Type': upstream.headers.get('content-type') || 'application/json', 'Cache-Control': 'private, no-store' } });
-    } catch { return json({ error: 'Azure vision gateway is temporarily unavailable.' }, signal.aborted ? 504 : 502); }
+function parseEndpoint(raw: string | undefined): URL | null {
+  try {
+    const url = new URL(raw ?? '');
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return null;
+    if (!/\.inference\.ml\.azure\.com$|\.openai\.azure\.com$|\.services\.ai\.azure\.com$/i.test(url.hostname)) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
   }
+}
 
-  if (!deps.apiKey) return json({ error: 'Azure vision credentials are not configured.' }, 503);
-  const model = deps.model || 'Qwen/Qwen3-VL-8B-Instruct';
-  const contextText = JSON.stringify(parsed.context).slice(0, 5000);
-  const messages: Array<Record<string, unknown>> = [
-    { role: 'system', content: 'You are Xavier visual perception, part of the Xavier cognitive system. Observe carefully. Describe only what is supported by the pixels, distinguish observation from inference, read visible text when useful, reason about spatial relationships, and mention uncertainty when material. Never claim consciousness. Return a concise but useful answer for the user, not hidden chain-of-thought.' },
-    ...parsed.history,
-    { role: 'user', content: [
-      { type: 'text', text: `${parsed.question}\n\nOperational cognitive context (not visual evidence): ${contextText}` },
-      ...parsed.images.map((image) => ({ type: 'image_url', image_url: { url: image.dataUrl } })),
-    ] },
-  ];
+async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
+  const reader = request.body?.getReader();
+  if (!reader) throw new VisionBodyError(400, 'Vision request is required.');
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BODY_BYTES) {
+        await reader.cancel();
+        throw new VisionBodyError(413, 'Vision request is too large.');
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  if (!record(parsed)) throw new VisionBodyError(400, 'Invalid vision request.');
+  return parsed;
+}
+
+function validateImage(value: unknown) {
+  if (typeof value !== 'string') throw new VisionBodyError(400, 'Image URL or data URL is required.');
+  const image = value.trim();
+  if (!image) throw new VisionBodyError(400, 'Image URL or data URL is required.');
+  if (image.length > MAX_IMAGE_DATA_URL_CHARS) throw new VisionBodyError(413, 'Image payload is too large.');
+
+  if (/^data:image\/(?:png|jpeg|jpg|webp);base64,[a-z0-9+/=\s]+$/i.test(image)) {
+    return image.replace(/\s/g, '');
+  }
 
   try {
-    const upstream = await (deps.fetcher ?? fetch)(modelEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${deps.apiKey}` }, cache: 'no-store', redirect: 'error', signal, body: JSON.stringify({ model, messages, temperature: 0.2, top_p: 0.9, max_tokens: 900, stream: false }) });
-    const payload: unknown = await upstream.json().catch(() => null);
-    if (!upstream.ok) return json({ error: upstream.status === 429 ? 'Xavier Vision is busy. Try again shortly.' : 'The Azure vision model could not inspect this scene.' }, upstream.status === 429 ? 429 : 502);
-    const observation = extractText(payload);
-    if (!observation) return json({ error: 'The vision model returned an empty observation.' }, 502);
-    return json({ observation, text: observation, model, provider: 'Xavier Vision · Qwen3-VL', confidence: 0.78 }, 200);
-  } catch { return json({ error: signal.aborted ? 'Xavier took too long to inspect the scene.' : 'Xavier Vision is temporarily unavailable.' }, signal.aborted ? 504 : 502); }
+    const url = new URL(image);
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) {
+      throw new Error('invalid');
+    }
+    return url.toString();
+  } catch {
+    throw new VisionBodyError(400, 'Use an HTTPS image URL or a png/jpeg/webp data URL.');
+  }
+}
+
+function buildPayload(body: Record<string, unknown>, model: string) {
+  const allowed = new Set(['image', 'images', 'prompt', 'question', 'detail', 'maxTokens', 'context', 'history']);
+  for (const key of Object.keys(body)) {
+    if (!allowed.has(key)) throw new VisionBodyError(400, 'Unsupported vision request field.');
+  }
+
+  const images = Array.isArray(body.images)
+    ? body.images.map((item) => record(item) ? validateImage(item.dataUrl ?? item.url ?? item.image) : '').filter(Boolean)
+    : [validateImage(body.image)];
+  if (images.length < 1 || images.length > MAX_IMAGES) {
+    throw new VisionBodyError(400, `Attach one to ${MAX_IMAGES} supported images.`);
+  }
+
+  const promptSource = typeof body.prompt === 'string' ? body.prompt : typeof body.question === 'string' ? body.question : '';
+  const prompt = promptSource.trim() || DEFAULT_PROMPT;
+  if (prompt.length > MAX_PROMPT_CHARS) {
+    throw new VisionBodyError(413, `Vision prompt must be ${MAX_PROMPT_CHARS} characters or fewer.`);
+  }
+  const detail = body.detail === 'low' || body.detail === 'high' ? body.detail : 'auto';
+  const maxTokens = Number.isInteger(body.maxTokens) ? Number(body.maxTokens) : 500;
+  if (maxTokens < 64 || maxTokens > 900) throw new VisionBodyError(400, 'maxTokens must be between 64 and 900.');
+
+  return {
+    model,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'text', text: prompt },
+        ...images.map((image) => ({ type: 'image_url', image_url: { url: image, detail } })),
+      ],
+    }],
+    max_tokens: maxTokens,
+    temperature: 0.2,
+    top_p: 0.9,
+    stream: false,
+  };
+}
+
+export async function handleVision(request: Request, dependencies: VisionDependencies): Promise<Response> {
+  const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
+  if (!token || token.length > 16_384) {
+    return jsonResponse({ error: 'Sign in to use Xavier vision.' }, 401);
+  }
+
+  const signal = AbortSignal.any([request.signal, AbortSignal.timeout(dependencies.timeoutMs ?? 45_000)]);
+  const log = dependencies.log ?? ((event, fields) => console.error(event, fields));
+
+  try {
+    if (!await dependencies.authenticate(token, signal)) {
+      return jsonResponse({ error: 'Your session has expired. Please sign in again.' }, 401);
+    }
+  } catch {
+    log('xavier_vision_auth_unavailable', { status: 503 });
+    return jsonResponse({ error: 'Sign-in verification is temporarily unavailable.' }, 503);
+  }
+
+  const endpoint = parseEndpoint(dependencies.endpoint);
+  if (!endpoint || !dependencies.apiKey) {
+    log('xavier_vision_configuration_missing', { status: 503 });
+    return jsonResponse({ error: 'Xavier vision is not configured.' }, 503);
+  }
+
+  let payload: ReturnType<typeof buildPayload>;
+  try {
+    payload = buildPayload(await readJsonBody(request), dependencies.model || DEFAULT_MODEL);
+  } catch (error) {
+    return jsonResponse(
+      { error: error instanceof VisionBodyError ? error.message : 'Invalid vision JSON.' },
+      error instanceof VisionBodyError ? error.status : 400,
+    );
+  }
+
+  try {
+    const upstream = await (dependencies.fetcher ?? fetch)(endpoint, {
+      method: 'POST',
+      headers: {
+        'api-key': dependencies.apiKey,
+        Authorization: `Bearer ${dependencies.apiKey}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(payload),
+      cache: 'no-store',
+      redirect: 'error',
+      signal,
+    });
+
+    const requestId = upstream.headers.get('x-ms-request-id') ?? upstream.headers.get('x-request-id') ?? undefined;
+    const headers: Record<string, string> = requestId ? { 'X-Request-Id': requestId } : {};
+    if (!upstream.ok) {
+      await upstream.body?.cancel();
+      const status = [400, 401, 403, 413, 429, 503, 504].includes(upstream.status) ? upstream.status : 502;
+      log('xavier_vision_upstream_error', { status: upstream.status, requestId });
+      return jsonResponse({ error: status === 429 ? 'Xavier vision allowance reached. Try again later.' : 'Xavier vision is temporarily unavailable.', requestId }, status, headers);
+    }
+
+    const result: unknown = await upstream.json();
+    const content = record(result)
+      && Array.isArray(result.choices)
+      && record(result.choices[0])
+      && record(result.choices[0].message)
+      && typeof result.choices[0].message.content === 'string'
+      ? result.choices[0].message.content.trim()
+      : '';
+    if (!content) {
+      log('xavier_vision_invalid_response', { status: 502, requestId });
+      return jsonResponse({ error: 'Xavier vision returned an invalid response.', requestId }, 502, headers);
+    }
+
+    return jsonResponse({
+      content,
+      observation: content,
+      text: content,
+      model: dependencies.model || DEFAULT_MODEL,
+      provider: 'Xavier Vision · Qwen3-VL',
+      requestId,
+    }, 200, headers);
+  } catch {
+    const status = signal.aborted ? 504 : 502;
+    log('xavier_vision_transport_error', { status });
+    return jsonResponse({ error: status === 504 ? 'Xavier vision took too long to respond.' : 'Xavier vision is temporarily unavailable.' }, status);
+  }
 }

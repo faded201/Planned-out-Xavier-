@@ -6,10 +6,9 @@ export const maxDuration = 60;
 
 export async function POST(request: Request) {
   return handleVision(request, {
-    endpoint: process.env.XAVIER_VISION_ENDPOINT,
+    endpoint: process.env.XAVIER_VISION_API_URL,
     apiKey: process.env.XAVIER_VISION_API_KEY,
     model: process.env.XAVIER_VISION_MODEL,
-    gateway: process.env.XAVIER_AZURE_GATEWAY_URL,
     async authenticate(token, signal) {
       const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
       const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
