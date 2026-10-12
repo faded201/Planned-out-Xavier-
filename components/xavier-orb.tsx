@@ -1,6 +1,6 @@
 'use client';
 
-import { useId } from 'react';
+import { useId, type CSSProperties } from 'react';
 
 export type XavierPhase = 'dormant' | 'listening' | 'understanding' | 'planning' | 'executing' | 'speaking' | 'completed';
 
@@ -17,9 +17,21 @@ const nodes = [
   [154,176],[120,158],[82,181],[48,151],[69,117]
 ] as const;
 
-export function XavierOrb({ phase, premium = false, onActivate, large = false }: { phase: XavierPhase; premium?: boolean; onActivate?: () => void; large?: boolean }) {
+type CognitiveVisual = {
+  heartbeat: number;
+  focus: string;
+  affect: { confidence: number; uncertainty: number; curiosity: number; cognitiveLoad: number };
+};
+
+export function XavierOrb({ phase, premium = false, onActivate, large = false, cognitive }: { phase: XavierPhase; premium?: boolean; onActivate?: () => void; large?: boolean; cognitive?: CognitiveVisual }) {
   const id = useId().replace(/:/g, '');
-  const status = phase === 'dormant' ? 'Ready when you are' : phase;
+  const status = phase === 'dormant' ? (cognitive?.focus ? 'aware · ' + cognitive.focus.slice(0, 24) : 'Ready when you are') : phase;
+  const brainStyle = cognitive ? ({
+    '--x-confidence': cognitive.affect.confidence,
+    '--x-uncertainty': cognitive.affect.uncertainty,
+    '--x-curiosity': cognitive.affect.curiosity,
+    '--x-load': cognitive.affect.cognitiveLoad,
+  } as CSSProperties) : undefined;
   const visual = <>
     <span className="xavier-field" />
     <span className="xavier-orbit xavier-orbit-x"><i /></span>
@@ -50,6 +62,6 @@ export function XavierOrb({ phase, premium = false, onActivate, large = false }:
     </span>
     <span className="alien-caption"><strong>XAVIER</strong><small>{status}</small></span>
   </>;
-  const className = `xavier-orb alien-tech interconnected ${premium ? 'premium' : 'standard'} ${large ? 'orb-large' : ''} phase-${phase}`;
-  return onActivate ? <button type="button" className={className} onClick={onActivate} aria-label={`Open Xavier assistant. Xavier is ${phase}`}>{visual}</button> : <div className={className} role="img" aria-label={`Xavier AI interconnected neural sphere, ${phase}`}>{visual}</div>;
+  const className = `xavier-orb alien-tech interconnected ${cognitive ? 'brain-aware' : ''} ${premium ? 'premium' : 'standard'} ${large ? 'orb-large' : ''} phase-${phase}`;
+  return onActivate ? <button type="button" className={className} style={brainStyle} data-heartbeat={cognitive?.heartbeat} onClick={onActivate} aria-label={`Open Xavier assistant. Xavier is ${phase}`}>{visual}</button> : <div className={className} style={brainStyle} data-heartbeat={cognitive?.heartbeat} role="img" aria-label={`Xavier AI interconnected neural sphere, ${phase}`}>{visual}</div>;
 }

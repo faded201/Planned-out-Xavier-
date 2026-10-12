@@ -11,8 +11,8 @@ function LayoutPreview({ id }: { id: LivingLayout }) {
 export function LivingLayoutPicker({ premium, value, onChange }: { premium: boolean; value: LivingLayout; onChange: (layout: LivingLayout) => void }) {
   return (
     <div className="living-picker">
-      <div className="living-picker-head"><strong>Living Xavier environments</strong><span>{premium ? 'PRO / FULL UNLOCKED' : 'PRO / FULL'}</span></div>
-      <p>Ten different working architectures. Each changes the app structure, calendar composition and Xavier intelligence surface — not just the colours.</p>
+      <div className="living-picker-head"><strong>Living Xavier environments</strong><span>{premium ? '20 ARCHITECTURES UNLOCKED' : 'PRO / FULL'}</span></div>
+      <p>Twenty reactive working architectures, including ten new consciousness-inspired environments driven by Xavier memory, attention, uncertainty, reflection and cognitive load.</p>
       <div className="living-grid">
         {livingLayoutOptions.map((item, index) => (
           <button type="button" key={item.id} disabled={!premium} className={premium && value === item.id ? 'chosen' : ''} onClick={() => onChange(item.id)}>
@@ -21,7 +21,7 @@ export function LivingLayoutPicker({ premium, value, onChange }: { premium: bool
           </button>
         ))}
       </div>
-      {!premium && <small className="premium-note">Free accounts keep all 10 standard skins. Upgrade to Pro or Full to unlock these ten living architectures and the premium Xavier orb.</small>}
+      {!premium && <small className="premium-note">Free accounts keep the standard visual skins. Upgrade to Pro or Full to unlock all 20 living architectures, including the 10 cognitive consciousness-inspired environments and the premium Xavier orb.</small>}
     </div>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { XavierOrb, type XavierPhase } from '@/components/xavier-orb';
+import { useXavierBrain } from '@/lib/xavier-brain';
 import { getSupabase } from '@/lib/supabase';
 import { voiceEndpoint } from '@/lib/voice-endpoint';
 import {
@@ -180,6 +181,7 @@ export function AssistantPanel({
   const [voiceReplies, setVoiceReplies] = useState(true);
   const [voiceError, setVoiceError] = useState('');
   const [phase, setPhaseState] = useState<XavierPhase>('dormant');
+  const brain = useXavierBrain();
 
   const actionsRef = useRef(actions);
   actionsRef.current = actions;
@@ -197,6 +199,7 @@ export function AssistantPanel({
 
   function setPhase(next: XavierPhase) {
     setPhaseState(next);
+    brain.transition(next);
     onPhaseChange?.(next);
   }
 
@@ -650,6 +653,7 @@ export function AssistantPanel({
   }
 
   async function sendMessage(text: string, forceVoice = false) {
+    brain.perceive(text);
     const history = messages.map((message) => ({
       role: message.role,
       content: message.parts
@@ -678,7 +682,7 @@ export function AssistantPanel({
         ? { text: commandReply, model: 'Xavier action' }
         : await serverAIChat(
             text,
-            actionsRef.current.getContext(),
+            { ...actionsRef.current.getContext(), xavierBrain: brain.contextForModel() },
             history,
             selectedModel,
             setProgress,
@@ -693,6 +697,7 @@ export function AssistantPanel({
           model: result.model,
         },
       ]);
+      brain.integrate(text, result.text, true);
 
       if (forceVoice || voiceRepliesRef.current) {
         speak(result.text, forceVoice);
@@ -714,6 +719,7 @@ export function AssistantPanel({
           parts: [{ type: 'text', text: errorText }],
         },
       ]);
+      brain.integrate(text, errorText, false);
 
       if (forceVoice || voiceRepliesRef.current) {
         speak(errorText, true);
@@ -744,6 +750,7 @@ export function AssistantPanel({
         <XavierOrb
           phase={phase}
           premium={premium}
+          cognitive={brain.state}
           onActivate={() => setOpen((value) => !value)}
         />
       </div>
@@ -816,10 +823,16 @@ export function AssistantPanel({
 
           <div className="assistant-log">
             <div className="xavier-orb-stage">
-              <XavierOrb phase={phase} premium={premium} large />
+              <XavierOrb phase={phase} premium={premium} cognitive={brain.state} large />
               <small className="assistant-phase-label">
                 {listening ? 'LISTENING' : phase.toUpperCase()}
               </small>
+              <div className="assistant-brain-vitals" aria-label="Xavier cognitive telemetry">
+                <span><small>CONF</small><b>{Math.round(brain.state.affect.confidence * 100)}</b></span>
+                <span><small>UNCERT</small><b>{Math.round(brain.state.affect.uncertainty * 100)}</b></span>
+                <span><small>MEM</small><b>{brain.state.episodes.length}</b></span>
+                <span><small>HEART</small><b>{brain.state.heartbeat}</b></span>
+              </div>
             </div>
 
             {messages.length === 0 && (

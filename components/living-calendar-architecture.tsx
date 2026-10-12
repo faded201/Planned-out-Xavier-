@@ -1,7 +1,7 @@
 'use client';
 
 import type { CSSProperties } from 'react';
-import type { LivingLayout } from '@/lib/premium';
+import { consciousnessLayouts, livingLayoutOptions, type LivingLayout } from '@/lib/premium';
 
 type Props = {
   layout: LivingLayout;
@@ -13,6 +13,15 @@ type Props = {
 };
 
 export function LivingCalendarArchitecture({ layout, month, activeSpace, access, visibleItems, todayItems }: Props) {
+  if (consciousnessLayouts.has(layout)) {
+    const name = livingLayoutOptions.find((item) => item.id === layout)?.name || 'Cognitive Field';
+    return <div className={`calendar-architecture architecture-panel consciousness-calendar calendar-${layout}`}>
+      <div className="conscious-calendar-core" aria-hidden="true"><i /><i /><i /><b>X</b></div>
+      <div><small>COGNITIVE CALENDAR</small><b>{name}</b><span>{activeSpace} · {access}</span></div>
+      <div className="conscious-calendar-signals"><span>{month}</span><span>{todayItems} today</span><span>{visibleItems} visible</span></div>
+    </div>;
+  }
+
   if (layout === 'neural-command') {
     return <div className="calendar-architecture architecture-panel neural-panel">
       <span className="neural-wire w1" /><span className="neural-wire w2" />
