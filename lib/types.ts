@@ -3,8 +3,8 @@ export const plannerLevels = ['life','decade','yearly','quarterly','monthly','we
 export type PlannerLevel = typeof plannerLevels[number];
 export type Priority = 'low' | 'medium' | 'high' | 'urgent';
 export type Status = 'planned' | 'active' | 'blocked' | 'done';
-export type AppView = 'dashboard' | 'planner' | 'calendar' | 'board' | 'focus' | 'files' | 'knowledge' | 'habits' | 'journal' | 'finance' | 'health' | 'learning' | 'travel' | 'contacts' | 'analytics' | 'templates' | 'settings';
-export type ModuleName = 'knowledge'|'habit'|'journal'|'finance'|'health'|'learning'|'travel'|'contact'|'meal'|'fitness'|'medication'|'subscription'|'risk'|'issue'|'vault'|'automation';
+export type AppView = 'dashboard' | 'life' | 'planner' | 'calendar' | 'board' | 'focus' | 'files' | 'knowledge' | 'habits' | 'journal' | 'finance' | 'health' | 'learning' | 'travel' | 'contacts' | 'analytics' | 'templates' | 'settings';
+export type ModuleName = 'knowledge'|'habit'|'journal'|'finance'|'health'|'learning'|'travel'|'contact'|'meal'|'fitness'|'medication'|'subscription'|'risk'|'issue'|'vault'|'automation'|'tax'|'invoice'|'crm'|'crm-schema'|'ndis';
 
 export const visualPresets = [
   'neon-grid','aurora-glass','cyber-deck','quantum-blue','holo-split',

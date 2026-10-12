@@ -14,6 +14,7 @@ import { usePremiumExperience } from '@/components/premium-experience';
 import { LivingLayoutPicker } from '@/components/living-layout-picker';
 import { LivingLayoutStage } from '@/components/living-layout-stage';
 import { PremiumChrome } from '@/components/premium-chrome';
+import { LifeBusinessOS } from '@/components/life-business-os';
 import type { XavierPhase } from '@/components/xavier-orb';
 import { useXavierBrainSignal } from '@/lib/xavier-brain';
 import { disablePushNotifications, enablePushNotifications, registerPushWorker } from '@/lib/push';
@@ -43,6 +44,7 @@ const now = () => new Date().toISOString();
 
 const views: Array<{ id: AppView; label: string; icon: string }> = [
   { id: 'dashboard', label: 'Command', icon: '⌘' },
+  { id: 'life', label: 'Life + Business', icon: '?' },
   { id: 'planner', label: 'Planner', icon: '◷' },
   { id: 'calendar', label: 'Calendar', icon: '▦' },
   { id: 'board', label: 'Board', icon: '▥' },
@@ -77,7 +79,11 @@ const modules: Array<{ module: ModuleName; title: string; icon: string; descript
   { module: 'vault', title: 'Digital Vault', icon: '▣', description: 'Important documents, IDs, warranties, receipts, licenses and certificates.', fields: ['expiry', 'documentType', 'secureNote'] },
   { module: 'automation', title: 'Automation Lab', icon: '⚡', description: 'Workflow rules, reminders, review cycles, project checks and smart nudges.', fields: ['trigger', 'action', 'frequency'] },
   { module: 'risk', title: 'Risk Register', icon: '⚠', description: 'Risks, issues, blockers, dependencies, owners and mitigation plans.', fields: ['impact', 'likelihood', 'mitigation'] },
-  { module: 'subscription', title: 'Subscription Watch', icon: '◌', description: 'Subscriptions, renewals, cancellations, trial endings and budget forecasting.', fields: ['amount', 'renews', 'cancelLink'] }
+  { module: 'subscription', title: 'Subscription Watch', icon: '◌', description: 'Subscriptions, renewals, cancellations, trial endings and budget forecasting.', fields: ['amount', 'renews', 'cancelLink'] },
+  { module: 'tax', title: 'Tax Centre', icon: '?', description: 'Australian business income, expenses, GST, BAS records and evidence references.', fields: ['financialYear', 'type', 'gst'] },
+  { module: 'invoice', title: 'Invoice Studio', icon: '?', description: 'Write, send, print and store invoices, including NDIS invoice fields.', fields: ['customer', 'dueDate', 'status'] },
+  { module: 'crm', title: 'CRM Universe', icon: '?', description: 'Fifty business CRM presets plus custom user-built workspaces.', fields: ['schema', 'pipeline', 'owner'] },
+  { module: 'ndis', title: 'NDIS Provider OS', icon: '?', description: 'Participants, supports, service evidence, claims and provider records.', fields: ['ndisNumber', 'supportItem', 'claimType'] }
 ];
 
 const templates = [
@@ -86,7 +92,9 @@ const templates = [
   { name: 'Health Recovery System', category: 'Health', details: 'Appointments, medication, symptoms, meals, habits, journal, attachments and doctor questions.' },
   { name: 'Study + Skill Builder', category: 'Learning', details: 'Course plan, reading tracker, revision schedule, assignments, files, notes and progress.' },
   { name: 'Travel Command Centre', category: 'Travel', details: 'Bookings, itinerary, packing, documents, budget, contacts, maps and daily agenda.' },
-  { name: 'Family Life Planner', category: 'Home', details: 'Birthdays, bills, school, meals, appointments, chores, documents and shared goals.' }
+  { name: 'Family Life Planner', category: 'Home', details: 'Birthdays, bills, school, meals, appointments, chores, documents and shared goals.' },
+  { name: 'Business Compliance OS', category: 'Business', details: 'Tax records, invoices, CRM, document retention, client follow-ups and recurring compliance tasks.' },
+  { name: 'NDIS Provider Operations', category: 'NDIS', details: 'Participant intake, service agreements, support evidence, invoice checkpoints, reviews and compliance tasks.' }
 ];
 
 
@@ -498,6 +506,12 @@ export function UltimatePlanner() {
     mutate((current) => ({ ...current, records: [record, ...current.records] }));
     await saveRecordToCloud(record);
     setRecordModal(null); alert(`${moduleTitle(record.module)} entry added.`);
+  }
+
+  async function upsertLifeBusinessRecord(record: ModuleRecord) {
+    const clean = { ...record, updatedAt: now() };
+    mutate((current) => ({ ...current, records: [clean, ...current.records.filter((item) => item.id !== clean.id)] }));
+    await saveRecordToCloud(clean);
   }
 
   async function signInWithPassword(event: React.FormEvent<HTMLFormElement>) {
@@ -934,6 +948,7 @@ export function UltimatePlanner() {
         onOpenTask={setSelectedTaskId}
         onInstallTemplate={installTemplate}
       />}
+      {view === 'life' && <LifeBusinessOS records={state.records} user={user} onSave={upsertLifeBusinessRecord} onRequestSignIn={() => setShowAuth(true)} onNotice={alert} />}
       {view === 'planner' && <PlannerView tasks={filteredTasks} selectedTask={selectedTask} onSelect={setSelectedTaskId} onNew={openTask} onEdit={editTask} onToggle={toggleTask} onDelete={deleteTask} />}
       {view === 'calendar' && <CollaborativeCalendar user={user} tasks={filteredTasks} premium={entitlement.premiumUi} livingLayout={livingLayout} onSelectTask={setSelectedTaskId} onCreateTask={() => openTask('daily')} onRequestSignIn={() => setShowAuth(true)} />}
       {view === 'board' && <BoardView tasks={filteredTasks} onSelect={setSelectedTaskId} onMove={toggleTask} />}
@@ -995,7 +1010,7 @@ function Dashboard({
     .filter((task) => task.status !== 'done')
     .sort((a, b) => `${a.dueDate}T${a.startTime || '23:59'}`.localeCompare(`${b.dueDate}T${b.startTime || '23:59'}`))
     .slice(0, 8);
-  return <section className="page"><div className="hero"><div><p className="eyebrow">LIFE → YEAR → MONTH → WEEK → DAY</p><h2>Everything connected. Nothing lost.</h2><p>Goals, tasks, documents, notes, habits, money, health, learning, travel and people in one command centre.</p></div><div className="hero-actions"><button onClick={() => onInstallTemplate('10 Year Vision → Today')}>Install Life OS</button><button onClick={() => onInstallTemplate('Business Launch War Room')}>Install Business OS</button></div></div><div className="stats"><Stat label="Total tasks" value={tasks.length} note={`${percentDone(tasks)}% completed`} /><Stat label="Pending" value={tasks.filter((task) => task.status !== 'done').length} note="Open commitments" /><Stat label="Active focus" value={active.length} note="In progress now" /><Stat label="Overdue" value={overdue} note="Need reschedule" /><Stat label="Files" value={files.length} note={`${records.length} knowledge records`} /></div><div className="grid two"><Panel title="Pending task command"><div className="task-list">{pending.map((task) => <button key={task.id} className="task-card" onClick={() => onOpenTask(task.id)}><div><b>{task.title}</b><span className="task-time-line"><strong>{taskDateTimeLabel(task)}</strong><span>{levelLabel(task.level)} · {task.area}</span></span>{task.notifyEnabled && <span className="reminder-chip"><i className="reminder-dot" />Alert {reminderOptions.find((item) => item.minutes === task.reminderMinutes)?.label || `${task.reminderMinutes}m before`}</span>}</div><Pill tone={task.priority}>{task.priority}</Pill></button>)}</div></Panel><Panel title="Full platform modules"><div className="module-grid">{modules.slice(0, 12).map((item) => <div className="module-card" key={item.module}><span>{item.icon}</span><b>{item.title}</b><small>{item.description}</small></div>)}</div></Panel></div></section>;
+  return <section className="page"><div className="hero"><div><p className="eyebrow">LIFE → YEAR → MONTH → WEEK → DAY</p><h2>Everything connected. Nothing lost.</h2><p>Goals, calendar, tax, invoices, CRM, NDIS, documents, money, health, learning, travel and people in one command centre.</p></div><div className="hero-actions"><button onClick={() => onInstallTemplate('10 Year Vision → Today')}>Install Life OS</button><button onClick={() => onInstallTemplate('Business Launch War Room')}>Install Business OS</button></div></div><div className="stats"><Stat label="Total tasks" value={tasks.length} note={`${percentDone(tasks)}% completed`} /><Stat label="Pending" value={tasks.filter((task) => task.status !== 'done').length} note="Open commitments" /><Stat label="Active focus" value={active.length} note="In progress now" /><Stat label="Overdue" value={overdue} note="Need reschedule" /><Stat label="Files" value={files.length} note={`${records.length} knowledge records`} /></div><div className="grid two"><Panel title="Pending task command"><div className="task-list">{pending.map((task) => <button key={task.id} className="task-card" onClick={() => onOpenTask(task.id)}><div><b>{task.title}</b><span className="task-time-line"><strong>{taskDateTimeLabel(task)}</strong><span>{levelLabel(task.level)} · {task.area}</span></span>{task.notifyEnabled && <span className="reminder-chip"><i className="reminder-dot" />Alert {reminderOptions.find((item) => item.minutes === task.reminderMinutes)?.label || `${task.reminderMinutes}m before`}</span>}</div><Pill tone={task.priority}>{task.priority}</Pill></button>)}</div></Panel><Panel title="Full platform modules"><div className="module-grid">{modules.slice(0, 12).map((item) => <div className="module-card" key={item.module}><span>{item.icon}</span><b>{item.title}</b><small>{item.description}</small></div>)}</div></Panel></div></section>;
 }
 function Stat({ label, value, note }: { label: string; value: number | string; note: string }) { return <div className="stat"><span>{label}</span><strong>{value}</strong><small>{note}</small></div>; }
 function Panel({ title, children }: { title: string; children: React.ReactNode }) { return <div className="panel"><div className="panel-head"><h3>{title}</h3></div>{children}</div>; }

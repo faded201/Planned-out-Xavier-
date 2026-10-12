@@ -3,10 +3,11 @@ import './globals.css';
 import './premium.css';
 import './xavier-sphere.css';
 import './consciousness.css';
+import './business-os.css';
 
 export const metadata: Metadata = {
   title: 'Xavier Planner OS Ultimate',
-  description: 'Life OS planner with AI, Supabase, attachments, knowledge, finance, health, travel, habits and analytics.'
+  description: 'Xavier life and business OS with AI, calendar, tax records, invoices, CRM, NDIS workflows, finance, health, travel and planning.'
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
