@@ -3,6 +3,7 @@ type VisionDependencies = {
   apiKey?: string;
   model?: string;
   authenticate: (token: string, signal: AbortSignal) => Promise<boolean>;
+  authorizePaid?: (token: string, signal: AbortSignal) => Promise<boolean>;
   fetcher?: typeof fetch;
   timeoutMs?: number;
   log?: (event: string, fields: { status: number; requestId?: string }) => void;
@@ -146,6 +147,18 @@ export async function handleVision(request: Request, dependencies: VisionDepende
   } catch {
     log('xavier_vision_auth_unavailable', { status: 503 });
     return jsonResponse({ error: 'Sign-in verification is temporarily unavailable.' }, 503);
+  }
+
+  // Never route free or unverified accounts to billable Azure inference.
+  if (dependencies.authorizePaid) {
+    try {
+      if (!await dependencies.authorizePaid(token, signal)) {
+        return jsonResponse({ error: 'Azure AI Vision is for Pro and Business subscribers. Free text recognition remains available.' }, 403);
+      }
+    } catch {
+      log('xavier_vision_entitlement_unavailable', { status: 503 });
+      return jsonResponse({ error: 'Vision subscription verification is temporarily unavailable.' }, 503);
+    }
   }
 
   const endpoint = parseEndpoint(dependencies.endpoint);
