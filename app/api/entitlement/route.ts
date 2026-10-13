@@ -5,7 +5,7 @@ export const runtime = 'nodejs';
 export async function GET(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const endpoint = process.env.XAVIER_AWS_API_URL;
+  const endpoint = process.env.XAVIER_AZURE_BACKEND_URL;
   const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
   if (!url || !key || !endpoint || !token) return Response.json({ plan: 'free', premiumUi: false }, { status: 401 });
   const sb = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -17,3 +17,4 @@ export async function GET(request: Request) {
   const body = await upstream.json().catch(() => ({ plan: 'free', premiumUi: false }));
   return Response.json(body, { status: upstream.status, headers: { 'Cache-Control': 'private, no-store' } });
 }
+

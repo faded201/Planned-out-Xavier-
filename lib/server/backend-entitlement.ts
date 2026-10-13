@@ -2,7 +2,7 @@ export type BackendPlan = 'free' | 'pro' | 'business';
 export type BackendEntitlement = { plan: BackendPlan; premiumUi?: boolean; owner?: boolean };
 
 export async function fetchBackendEntitlement(token: string, signal?: AbortSignal): Promise<BackendEntitlement> {
-  const endpoint = process.env.XAVIER_AWS_API_URL;
+  const endpoint = process.env.XAVIER_AZURE_BACKEND_URL;
   if (!endpoint) throw new Error('Entitlement backend is not configured');
   const target = new URL(endpoint);
   target.pathname = '/entitlement';
@@ -19,3 +19,4 @@ export async function fetchBackendEntitlement(token: string, signal?: AbortSigna
   if (!body || !['free', 'pro', 'business'].includes(String(body.plan))) throw new Error('Invalid entitlement response');
   return { plan: body.plan as BackendPlan, premiumUi: Boolean(body.premiumUi), owner: Boolean(body.owner) };
 }
+

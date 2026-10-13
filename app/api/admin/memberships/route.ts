@@ -6,7 +6,7 @@ const OWNER_ID = '06b5e7ce-9624-4afb-b2e9-24fc095038d5';
 export async function POST(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-  const endpoint = process.env.XAVIER_AWS_API_URL;
+  const endpoint = process.env.XAVIER_AZURE_BACKEND_URL;
   const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
   if (!url || !key || !endpoint) {
     return Response.json({ error: 'Owner service unavailable.' }, { status: 503 });
@@ -31,3 +31,4 @@ export async function POST(request: Request) {
   const result = await upstream.json().catch(() => ({ error: 'Invalid membership response.' }));
   return Response.json(result, { status: upstream.status, headers: { 'Cache-Control': 'no-store' } });
 }
+
