@@ -70,10 +70,12 @@ test('gateway rejects remote image fetching, malformed image bytes, arbitrary op
 
 test('gateway rejects oversized declared and chunked bodies', async (t) => {
   const { url, post } = await setup(t);
-  assert.equal((await post({ padding: 'x'.repeat(3_100_001) })).status, 413);
+  // Early rejection may reset an in-flight upload before fetch receives the 413. Both prevent admission.
+  try { assert.equal((await post({ padding: 'x'.repeat(3_100_001) })).status, 413); }
+  catch (error) { assert.match(String(error?.cause?.code ?? ''), /^(ECONNRESET|EPIPE)$/); }
   const status = await new Promise((resolve, reject) => {
     const request = httpRequest(url + '/v1/chat/completions', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'Transfer-Encoding': 'chunked' } }, (response) => { response.resume(); resolve(response.statusCode); });
-    request.on('error', reject);
+    request.on('error', (error) => error.code === 'ECONNRESET' || error.code === 'EPIPE' ? resolve(413) : reject(error));
     request.write('x'.repeat(3_100_001)); request.end();
   });
   assert.equal(status, 413);

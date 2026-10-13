@@ -1,3 +1,4 @@
+import { POST as azureAiPost } from '../azure-ai/route';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
@@ -11,6 +12,8 @@ function parseAzureRelay(value: string | undefined): URL | null {
 }
 
 export async function POST(request: Request) {
+  if (process.env.WEBSITE_SITE_NAME === 'planned-out-xavier') return azureAiPost(request);
+  if (Number(request.headers.get('content-length')) > 160_000) return Response.json({ error: 'Conversation context is too large.' }, { status: 413 });
   const relay = parseAzureRelay(process.env.XAVIER_AZURE_RELAY_URL);
   if (!relay) return Response.json({ error: 'Xavier Azure Intelligence is not configured.' }, { status: 503, headers: { 'Cache-Control': 'private, no-store' } });
   try {
