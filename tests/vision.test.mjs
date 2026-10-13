@@ -16,6 +16,7 @@ function request(body = { question: 'What do you see?', images: [{ name: 'camera
 function deps(overrides = {}) {
   return {
     endpoint,
+    provider: 'openai-compatible',
     apiKey: 'azure-model-secret',
     model: 'Qwen/Qwen3-VL-8B-Instruct',
     authenticate: async () => true,
@@ -56,7 +57,7 @@ test('vision sends only model credential upstream and returns observation safely
   assert.equal(response.status, 200);
   const body = await response.json();
   assert.equal(body.observation, 'A desk with a notebook and a mug.');
-  assert.equal(body.provider, 'Xavier Vision · Qwen3-VL');
+  assert.equal(body.provider, 'Xavier Vision (OpenAI-compatible)');
   assert.equal(response.headers.get('Cache-Control'), 'private, no-store');
   assert.equal(seenBody.model, 'Qwen/Qwen3-VL-8B-Instruct');
   assert.equal(seenBody.messages.at(-1).content.at(-1).image_url.url, image);
@@ -66,5 +67,33 @@ test('vision fails closed when no Azure vision endpoint is configured', async ()
   const response = await handleVision(request(), deps({ endpoint: undefined, gateway: undefined }));
   assert.equal(response.status, 503);
   const body = await response.json();
-  assert.match(body.error, /not deployed/i);
+  assert.match(body.error, /not configured/i);
+});
+
+test('vision preserves Azure-only default and rejects unsafe provider configuration', async () => {
+  for (const overrides of [
+    { provider: undefined },
+    { provider: 'unknown' },
+    { provider: 'local-gateway', endpoint: 'http://gateway.example/v1/chat/completions' },
+    { provider: 'local-gateway', endpoint: 'https://localhost/v1/chat/completions' },
+    { provider: 'local-gateway', endpoint: 'https://127.0.0.1/v1/chat/completions' },
+    { provider: 'local-gateway', endpoint: 'https://vision.openai.azure.com/v1/chat/completions' },
+    { provider: 'local-gateway', endpoint: 'https://vision.cognitiveservices.azure.com/v1/chat/completions' },
+    { provider: 'local-gateway', model: undefined },
+  ]) {
+    assert.equal((await handleVision(request(), deps({ ...overrides, fetcher: () => { throw new Error('must not run'); } }))).status, 503);
+  }
+});
+
+test('vision paid entitlement denial never invokes inference', async () => {
+  let calls = 0;
+  const result = await handleVision(request(), deps({ authorizePaid: async () => false, fetcher: () => { calls++; throw new Error('must not run'); } }));
+  assert.equal(result.status, 403);
+  assert.equal(calls, 0);
+});
+
+test('vision rejects oversized images and handles invalid or failed upstream responses', async () => {
+  assert.equal((await handleVision(request({ image: 'data:image/png;base64,' + 'A'.repeat(1_000_001) }), deps())).status, 413);
+  assert.equal((await handleVision(request(), deps({ fetcher: async () => Response.json({ choices: [] }) }))).status, 502);
+  assert.equal((await handleVision(request(), deps({ fetcher: async () => new Response('', { status: 429 }) }))).status, 429);
 });

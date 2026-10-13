@@ -6,11 +6,13 @@ export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 export async function POST(request: Request) {
+  const provider = process.env.XAVIER_VISION_PROVIDER || 'azure';
   return handleVision(request, {
-    endpoint: process.env.XAVIER_VISION_API_URL,
+    provider,
+    endpoint: process.env.XAVIER_VISION_ENDPOINT || process.env.XAVIER_VISION_API_URL,
     apiKey: process.env.XAVIER_VISION_API_KEY,
     model: process.env.XAVIER_VISION_MODEL,
-    async authorizePaid(token, signal) {
+    authorizePaid: provider === 'local-gateway' ? undefined : async (token, signal) => {
       const entitlement = await fetchBackendEntitlement(token, signal);
       return entitlement.owner === true || entitlement.plan === 'pro' || entitlement.plan === 'business';
     },

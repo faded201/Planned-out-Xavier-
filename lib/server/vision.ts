@@ -2,6 +2,7 @@ type VisionDependencies = {
   endpoint?: string;
   apiKey?: string;
   model?: string;
+  provider?: string;
   authenticate: (token: string, signal: AbortSignal) => Promise<boolean>;
   authorizePaid?: (token: string, signal: AbortSignal) => Promise<boolean>;
   fetcher?: typeof fetch;
@@ -35,13 +36,17 @@ function jsonResponse(body: unknown, status: number, headers: Record<string, str
   });
 }
 
-function parseEndpoint(raw: string | undefined): URL | null {
+function parseEndpoint(raw: string | undefined, provider: string): URL | null {
   try {
     const url = new URL(raw ?? '');
-    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return null;
-    if (!/\.inference\.ml\.azure\.com$|\.openai\.azure\.com$|\.services\.ai\.azure\.com$/i.test(url.hostname)) {
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash || url.port) return null;
+    if (!['azure', 'openai-compatible', 'local-gateway'].includes(provider)) return null;
+    const azure = /\.inference\.ml\.azure\.com$|\.openai\.azure\.com$|\.services\.ai\.azure\.com$|\.cognitiveservices\.azure\.com$/i.test(url.hostname);
+    if (provider === 'azure' && !azure) {
       return null;
     }
+    if (provider === 'local-gateway' && (azure || url.pathname !== '/v1/chat/completions' || url.search)) return null;
+    if (!url.hostname.includes('.') || url.hostname === 'localhost' || /^[\d.]+$/.test(url.hostname) || url.hostname.includes(':') || /\.(local|internal|localhost)$/.test(url.hostname)) return null;
     return url;
   } catch {
     return null;
@@ -129,6 +134,7 @@ function buildPayload(body: Record<string, unknown>, model: string) {
 }
 
 export async function handleVision(request: Request, dependencies: VisionDependencies): Promise<Response> {
+  const provider = dependencies.provider ?? 'azure';
   const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
   if (!token || token.length > 16_384) {
     return jsonResponse({ error: 'Sign in to use Xavier vision.' }, 401);
@@ -158,8 +164,8 @@ export async function handleVision(request: Request, dependencies: VisionDepende
     }
   }
 
-  const endpoint = parseEndpoint(dependencies.endpoint);
-  if (!endpoint || !dependencies.apiKey) {
+  const endpoint = parseEndpoint(dependencies.endpoint, provider);
+  if (!endpoint || !dependencies.apiKey || (provider === 'local-gateway' && !dependencies.model)) {
     log('xavier_vision_configuration_missing', { status: 503 });
     return jsonResponse({ error: 'Xavier vision is not configured.' }, 503);
   }
@@ -178,7 +184,7 @@ export async function handleVision(request: Request, dependencies: VisionDepende
     const upstream = await (dependencies.fetcher ?? fetch)(endpoint, {
       method: 'POST',
       headers: {
-        'api-key': dependencies.apiKey,
+        ...(provider === 'azure' ? { 'api-key': dependencies.apiKey } : {}),
         Authorization: `Bearer ${dependencies.apiKey}`,
         'Content-Type': 'application/json',
         Accept: 'application/json',
@@ -216,7 +222,7 @@ export async function handleVision(request: Request, dependencies: VisionDepende
       observation: content,
       text: content,
       model: dependencies.model || DEFAULT_MODEL,
-      provider: 'Xavier Vision · Qwen3-VL',
+      provider: provider === 'local-gateway' ? 'Xavier Vision (local Ollama)' : provider === 'azure' ? 'Xavier Vision (Azure)' : 'Xavier Vision (OpenAI-compatible)',
       requestId,
     }, 200, headers);
   } catch {
