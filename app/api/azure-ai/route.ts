@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { handleAzureOpenAI } from '@/lib/server/azure-openai';
+import { recordXavierUsage } from '@/lib/server/xavier-usage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -24,7 +25,7 @@ async function getAppServiceIdentityToken(signal: AbortSignal): Promise<string> 
 }
 
 export async function POST(request: Request) {
-  return handleAzureOpenAI(request, {
+  const result = await handleAzureOpenAI(request, {
     endpoint: process.env.AZURE_OPENAI_ENDPOINT,
     apiKey: process.env.AZURE_OPENAI_API_KEY,
     deployment: process.env.AZURE_OPENAI_DEPLOYMENT,
@@ -42,6 +43,11 @@ export async function POST(request: Request) {
       return !error && Boolean(data.user);
     },
   });
+  if (result.ok) {
+    const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
+    if (token) await recordXavierUsage(token, process.env.AZURE_OPENAI_DEPLOYMENT || 'unknown').catch(() => undefined);
+  }
+  return result;
 }
 
 export async function GET() {

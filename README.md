@@ -175,7 +175,15 @@ Useful links:
 - [ ] Monitoring, budgets, secrets rotation and rollback process confirmed
 - [ ] Voice/vision functionality verified separately if enabled
 
-## 12. Repository map
+## 12. Owner-only AI usage dashboard
+
+Visit **`/admin/ai-usage`** while signed in with the existing owner Supabase account. The dashboard lists recent authenticated Xavier Azure AI users, their account email, request count and last use, plus the latest 50 successful calls. The list is limited to the latest 200 successful requests; it is **not** a lifetime count or a real-time presence tracker.
+
+The server records only account ID, model, timestamp and successful request status. It **does not store conversations, prompts, AI replies, IP addresses or bearer tokens**. Other users cannot read the usage table through Supabase: row-level security is enabled and anonymous/authenticated table privileges are revoked. The API also verifies the owner's Supabase user ID server-side. The licensing contact email is **not** automatically an authentication account.
+
+**Deployment prerequisites:** apply `supabase/migrations/20261014_xavier_ai_usage.sql` to the production Supabase project (already applied to the connected project during development), and configure `SUPABASE_SERVICE_ROLE_KEY` securely on the server that handles `/api/azure-ai`. Never set it as `NEXT_PUBLIC_` or expose it in client JavaScript. Without this secret, the dashboard fails closed with a configuration error and requests are not logged. The existing GitHub Actions billing lock still prevents automatic Azure deployment until resolved.
+
+## 13. Repository map
 
 | Path | Role |
 | --- | --- |
@@ -192,13 +200,13 @@ Useful links:
 | `docs/` | Topic-specific configuration and operational notes |
 | `public/` | Static assets |
 
-## 13. Security and contribution policy
+## 14. Security and contribution policy
 
 This project is **not open source**. Do not assume permission to submit changes, redistribute assets, or reuse original code. External contributions must be approved by the owner, with appropriate written terms addressing rights and third-party materials.
 
 Security reports should be shared privately with the repository owner. Never include secrets or exploitable customer data in public issues. Production AI permissions, authentication and billing decisions must be enforced on the server, not through UI hiding or prompt instructions alone.
 
-## 14. Support and further documentation
+## 15. Support and further documentation
 
 For access or licensing requests, contact James Tane Hapurona at [trooperhaps@gmail.com](mailto:trooperhaps@gmail.com). Technical notes are in [`docs/`](docs/), including billing, daily essentials, Azure vision, voice subscriptions and deployment status. Some documents record historical experiments or incomplete migrations; verify them against current code and live infrastructure before acting.
 
