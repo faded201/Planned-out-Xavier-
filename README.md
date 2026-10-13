@@ -10,7 +10,8 @@ Planned Out is a mobile-first planning and life-management application with **Xa
 
 - **Project:** Planned Out / Xavier OS
 - **Repository:** [faded201/Planned-out-Xavier-](https://github.com/faded201/Planned-out-Xavier-)
-- **Named project owner and rights contact:** James Tane Hapurona (GitHub account `faded201`). Copyright ownership remains subject to applicable law and any contributor or third-party rights.
+- **Named project owner:** James Tane Hapurona (GitHub account `faded201`)
+- **Licensing and permissions contact:** [trooperhaps@gmail.com](mailto:trooperhaps@gmail.com). Copyright ownership remains subject to applicable law and any contributor or third-party rights.
 - **Distribution model:** proprietary; explicit written permission required from the rights holder
 - **Third-party exceptions:** packages, embedded libraries, models, media, and separately licensed files keep their own terms, including files under `.agents/skills/`
 
@@ -199,7 +200,7 @@ Security reports should be shared privately with the repository owner. Never inc
 
 ## 14. Support and further documentation
 
-For access or licensing requests, contact the verified project owner through [GitHub](https://github.com/faded201/Planned-out-Xavier-). Technical notes are in [`docs/`](docs/), including billing, daily essentials, Azure vision, voice subscriptions and deployment status. Some documents record historical experiments or incomplete migrations; verify them against current code and live infrastructure before acting.
+For access or licensing requests, contact James Tane Hapurona at [trooperhaps@gmail.com](mailto:trooperhaps@gmail.com). Technical notes are in [`docs/`](docs/), including billing, daily essentials, Azure vision, voice subscriptions and deployment status. Some documents record historical experiments or incomplete migrations; verify them against current code and live infrastructure before acting.
 
 ---
 
