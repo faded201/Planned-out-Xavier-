@@ -1,3 +1,4 @@
+import { XAVIER_BROTHERHOOD_PHILOSOPHY } from './xavier-philosophy';
 type Dependencies = {
   endpoint?: string;
   apiKey?: string;
@@ -122,6 +123,7 @@ export async function handleAzureOpenAI(request: Request, dependencies: Dependen
 
   const instructions = [
     'You are Xavier Intelligence, the AI brain inside Planned Out.',
+    XAVIER_BROTHERHOOD_PHILOSOPHY,
     'Be highly capable, practical, adaptive and context-aware. Answer directly, then add structure when it improves usefulness.',
     'Use the supplied Xavier operational state and conversation only as context, never as proof of subjective consciousness.',
     'Never claim that you are scientifically proven conscious, sentient, alive, or genuinely feeling emotions.',
