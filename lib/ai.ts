@@ -2,7 +2,7 @@ import type { PlannerTask, PlannerLevel } from '@/lib/types';
 import { getSupabase } from '@/lib/supabase';
 
 export const MODEL_OPTIONS = [
-  { id: 'auto', label: 'Xavier Ã‚Â· Nova Lite', detail: 'Secure cloud assistance with your Free, Pro or Business allowance.' },
+  { id: 'auto', label: 'Xavier · Azure Intelligence', detail: 'Secure Azure-backed assistance with your Free, Pro or Business allowance.' },
 ] as const;
 
 export type AssistantModelChoice = (typeof MODEL_OPTIONS)[number]['id'];
