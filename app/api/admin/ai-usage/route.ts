@@ -17,7 +17,7 @@ export async function GET(request: Request) {
   if (error || !data.user) return Response.json({ error: 'Invalid session.' }, { status: 401, headers });
   if (data.user.id !== OWNER_ID) return Response.json({ error: 'Owner access required.' }, { status: 403, headers });
   const { data: records, error: queryError } = await service.from('xavier_ai_usage')
-    .select('user_id,occurred_at,model,status').order('occurred_at', { ascending: false }).limit(200);
+    .select('user_id,occurred_at,model,status,client_ip').order('occurred_at', { ascending: false }).limit(200);
   if (queryError) return Response.json({ error: 'Usage database unavailable. Apply the migration.' }, { status: 503, headers });
   const ids = [...new Set((records || []).map(item => item.user_id))];
   const users = await Promise.all(ids.map(async id => {
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     totalRecentRequests: records?.length || 0,
     users: ids.map(id => {
       const rows = (records || []).filter(r => r.user_id === id);
-      return { id, email: emailById[id], requests: rows.length, lastUsed: rows[0]?.occurred_at || null };
+      return { id, email: emailById[id], requests: rows.length, lastUsed: rows[0]?.occurred_at || null, lastIp: rows[0]?.client_ip || null };
     }).sort((a,b) => b.requests-a.requests),
     recent: (records || []).slice(0, 50).map(r => ({ ...r, email: emailById[r.user_id] })),
     note: 'Shows up to 200 recent successful Azure AI requests, not lifetime totals. No message contents are stored.',

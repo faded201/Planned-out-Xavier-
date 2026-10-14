@@ -4,8 +4,8 @@ import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { getSupabase } from '@/lib/supabase';
 
-type UserRow = { id: string; email: string; requests: number; lastUsed: string | null };
-type Activity = { user_id: string; email: string; occurred_at: string; model: string; status: string };
+type UserRow = { id: string; email: string; requests: number; lastUsed: string | null; lastIp: string | null };
+type Activity = { user_id: string; email: string; occurred_at: string; model: string; status: string; client_ip: string | null };
 type Usage = { users: UserRow[]; recent: Activity[]; totalRecentRequests: number; note: string };
 const date = (value: string | null) => value ? new Date(value).toLocaleString() : 'Never';
 
@@ -43,15 +43,15 @@ export default function XavierUsagePage() {
       <p>{usage.note}</p>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', textAlign: 'left', borderSpacing: 12 }}>
-          <thead><tr><th>Account email</th><th>Requests</th><th>Last active</th></tr></thead>
-          <tbody>{usage.users.map(u => <tr key={u.id}><td>{u.email}</td><td>{u.requests}</td><td>{date(u.lastUsed)}</td></tr>)}</tbody>
+          <thead><tr><th>Account email</th><th>Requests</th><th>Last active</th><th>Last IP</th></tr></thead>
+          <tbody>{usage.users.map(u => <tr key={u.id}><td>{u.email}</td><td>{u.requests}</td><td>{date(u.lastUsed)}</td><td>{u.lastIp || 'Unavailable'}</td></tr>)}</tbody>
         </table>
       </div>
       <h2>Recent activity</h2>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', textAlign: 'left', borderSpacing: 12 }}>
-          <thead><tr><th>When</th><th>Account</th><th>Model</th></tr></thead>
-          <tbody>{usage.recent.map((r, i) => <tr key={r.user_id + r.occurred_at + i}><td>{date(r.occurred_at)}</td><td>{r.email}</td><td>{r.model}</td></tr>)}</tbody>
+          <thead><tr><th>When</th><th>Account</th><th>Model</th><th>IP address</th></tr></thead>
+          <tbody>{usage.recent.map((r, i) => <tr key={r.user_id + r.occurred_at + i}><td>{date(r.occurred_at)}</td><td>{r.email}</td><td>{r.model}</td><td>{r.client_ip || 'Unavailable'}</td></tr>)}</tbody>
         </table>
       </div>
     </>}

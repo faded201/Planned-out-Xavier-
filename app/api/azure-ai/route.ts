@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { handleAzureOpenAI } from '@/lib/server/azure-openai';
-import { recordXavierUsage } from '@/lib/server/xavier-usage';
+import { azureClientIp, recordXavierUsage } from '@/lib/server/xavier-usage';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -45,7 +45,7 @@ export async function POST(request: Request) {
   });
   if (result.ok) {
     const token = request.headers.get('authorization')?.match(/^Bearer ([^\s]+)$/i)?.[1];
-    if (token) await recordXavierUsage(token, process.env.AZURE_OPENAI_DEPLOYMENT || 'unknown').catch(() => undefined);
+    if (token) await recordXavierUsage(token, process.env.AZURE_OPENAI_DEPLOYMENT || 'unknown', azureClientIp(request)).catch(() => undefined);
   }
   return result;
 }
