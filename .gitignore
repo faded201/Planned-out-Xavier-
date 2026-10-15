@@ -28,3 +28,5 @@ scripts/agent-worker/worker-token.xml
 scripts/agent-worker/workspace/
 .azure-package-agent/
 planned-out-agent.zip
+scripts/agent-worker/worker-private-key.xml
+scripts/agent-worker/worker-public-key.txt

@@ -3,13 +3,16 @@ import path from 'node:path';
 import { spawn, execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { lookup } from 'node:dns/promises';
+import { createPrivateKey, randomUUID, sign } from 'node:crypto';
 import { BlockList, isIP } from 'node:net';
 import { chromium } from 'playwright';
 
 const config = process.env;
 const server = new URL(config.XAVIER_AGENT_SERVER || '');
 if (server.protocol !== 'https:' || server.username || server.password) throw new Error('HTTPS task server required');
-if (!config.XAVIER_AGENT_WORKER_TOKEN || config.XAVIER_AGENT_WORKER_TOKEN.length < 43) throw new Error('Worker token required');
+const sharedToken = config.XAVIER_AGENT_WORKER_TOKEN || '';
+const signingKey = config.XAVIER_AGENT_PRIVATE_KEY ? createPrivateKey(config.XAVIER_AGENT_PRIVATE_KEY) : null;
+if (!signingKey && sharedToken.length < 43) throw new Error('Worker authentication required');
 const root = path.resolve(config.XAVIER_AGENT_WORKSPACE || './workspace');
 await mkdir(root, { recursive: true, mode: 0o700 });
 const shutdown = new AbortController();
@@ -17,7 +20,15 @@ process.on('SIGINT', () => shutdown.abort()); process.on('SIGTERM', () => shutdo
 const blocked = new BlockList();
 for (const [ip,bits] of [['0.0.0.0',8],['10.0.0.0',8],['100.64.0.0',10],['127.0.0.0',8],['169.254.0.0',16],['172.16.0.0',12],['192.168.0.0',16],['192.0.0.0',24],['198.18.0.0',15],['224.0.0.0',4],['240.0.0.0',4]]) blocked.addSubnet(ip,bits,'ipv4');
 async function rpc(body) {
-  const response = await fetch(new URL('/api/agent/worker',server), { method:'POST', redirect:'error', headers:{ Authorization:`Bearer ${config.XAVIER_AGENT_WORKER_TOKEN}`, 'Content-Type':'application/json' }, body:JSON.stringify(body), signal:AbortSignal.timeout(15000) });
+  const payload=JSON.stringify(body);
+  const headers={ 'Content-Type':'application/json' };
+  if(signingKey){
+    const timestamp=String(Date.now()); const nonce=randomUUID();
+    const message=Buffer.from(`${timestamp}\n${nonce}\n${payload}`,'utf8');
+    headers['X-Xavier-Agent-Timestamp']=timestamp; headers['X-Xavier-Agent-Nonce']=nonce;
+    headers['X-Xavier-Agent-Signature']=sign(null,message,signingKey).toString('base64url');
+  } else headers.Authorization=`Bearer ${sharedToken}`;
+  const response = await fetch(new URL('/api/agent/worker',server), { method:'POST', redirect:'error', headers, body:payload, signal:AbortSignal.timeout(15000) });
   if (!response.ok) throw new Error(`Task server HTTP ${response.status}`);
   return response.json();
 }

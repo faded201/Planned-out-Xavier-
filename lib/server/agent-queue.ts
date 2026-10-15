@@ -19,7 +19,10 @@ export class AgentQueue {
         id TEXT PRIMARY KEY, owner TEXT NOT NULL, target TEXT NOT NULL,
         status TEXT NOT NULL, data TEXT NOT NULL, lease TEXT, deadline INTEGER,
         updated INTEGER NOT NULL);
-      CREATE INDEX IF NOT EXISTS agent_task_queue ON agent_tasks(status,target,updated);`);
+      CREATE INDEX IF NOT EXISTS agent_task_queue ON agent_tasks(status,target,updated);
+      CREATE TABLE IF NOT EXISTS agent_worker_nonces (
+        nonce TEXT PRIMARY KEY, target TEXT NOT NULL, created INTEGER NOT NULL);
+      CREATE INDEX IF NOT EXISTS agent_worker_nonce_age ON agent_worker_nonces(created);`);
   }
   create(owner: string, goal: string, target: 'cloud' | 'windows', origins: string[]) {
     const task: AgentTask = { id: randomUUID(), goal, target, origins, status: 'queued', input: [{ role: 'user', content: goal }], events: ['Task queued'], rounds: 0 };
@@ -28,6 +31,16 @@ export class AgentQueue {
   }
   list(owner: string) {
     return this.db.prepare('SELECT data,status FROM agent_tasks WHERE owner=? ORDER BY updated DESC LIMIT 50').all(owner).map(row => ({ ...JSON.parse(String(row.data)), status: row.status }));
+  }
+  acceptWorkerNonce(target: string, nonce: string, issuedAt: number) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      this.db.prepare('DELETE FROM agent_worker_nonces WHERE created<?').run(Date.now() - 5 * 60_000);
+      this.db.prepare('INSERT INTO agent_worker_nonces(nonce,target,created) VALUES (?,?,?)').run(nonce, target, issuedAt);
+      this.db.exec('COMMIT'); return true;
+    } catch {
+      this.db.exec('ROLLBACK'); return false;
+    }
   }
   control(owner: string, id: string, action: string) {
     this.db.exec('BEGIN IMMEDIATE');
@@ -47,7 +60,6 @@ export class AgentQueue {
   claim(target: string) {
     this.db.exec('BEGIN IMMEDIATE');
     try {
-      // A lost worker may have performed a side effect: never replay its task automatically.
       this.db.prepare("UPDATE agent_tasks SET status='interrupted',lease=NULL WHERE status='running' AND deadline<?").run(Date.now());
       const row = this.db.prepare("SELECT data FROM agent_tasks WHERE target=? AND status='queued' ORDER BY updated LIMIT 1").get(target);
       if (!row) { this.db.exec('COMMIT'); return null; }

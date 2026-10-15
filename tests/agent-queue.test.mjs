@@ -40,3 +40,12 @@ test('expired leases are interrupted rather than replayed',async()=>{
     assert.equal(queue.list('owner')[0].status,'interrupted');
   } finally {queue.db.close();await rm(root,{recursive:true,force:true});}
 });
+
+test('worker request nonces are one-time to prevent signed-request replay', async () => {
+  const root=await mkdtemp(path.join(os.tmpdir(),'xavier-nonce-'));const queue=new AgentQueue(path.join(root,'tasks.db'));
+  try {
+    const now=Date.now();
+    assert.equal(queue.acceptWorkerNonce('windows','11111111-1111-4111-8111-111111111111',now),true);
+    assert.equal(queue.acceptWorkerNonce('windows','11111111-1111-4111-8111-111111111111',now),false);
+  } finally {queue.db.close();await rm(root,{recursive:true,force:true});}
+});
