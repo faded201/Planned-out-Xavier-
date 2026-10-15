@@ -23,3 +23,8 @@ server/reference-audio/
 # Local Azure deployment artifacts
 .azure-package/
 planned-out-azure.zip
+.xavier-agent/
+scripts/agent-worker/worker-token.xml
+scripts/agent-worker/workspace/
+.azure-package-agent/
+planned-out-agent.zip

@@ -7,6 +7,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "agent": "node scripts/xavier-agent.mjs",
     "dev": "next dev",
     "build": "next build --webpack",
     "start": "next start",

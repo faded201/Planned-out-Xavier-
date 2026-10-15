@@ -922,12 +922,12 @@ export function UltimatePlanner() {
     <aside className={`sidebar ${mobileOpen ? 'open' : ''}`}>
       <div className="brand"><div className="mark">X</div><div><strong>Xavier Planner <span>OS</span></strong><small>Ultimate Life Operating System</small></div></div>
       <button className="quick" onClick={() => openTask('daily')}>+ Quick task</button>
-      <a className="xavier-ai-nav" href="/xavier"><span>◉</span><strong>Xavier AI</strong><small>Chat · voice · vision</small></a>
+      <a className="xavier-ai-nav" href="/xavier"><span aria-hidden="true">◉</span><strong>Xavier Chat</strong><small>Chat · voice · vision</small></a>
       <nav>{views.map((item) => <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => { setView(item.id); setMobileOpen(false); }}><span>{item.icon}</span>{item.label}</button>)}</nav>
       <div className="sync-card"><strong>{user ? 'Cloud synced' : 'Device mode'}</strong><small>{user?.email || 'Sign in for Supabase sync + vault files'}</small><button onClick={() => setShowAuth(true)}>{user ? 'Account' : 'Sign in'}</button></div>
     </aside>
     <main className="main">
-      <header className="topbar"><button className="menu" onClick={() => setMobileOpen(true)}>☰</button><div><span className="eyebrow">WORLD-CLASS PLANNER</span><h1>{views.find((item) => item.id === view)?.label || 'Command'}</h1></div><div className="search"><span>⌕</span><input placeholder="Search tasks, tax, invoices, CRM, NDIS, files..." value={query} onChange={(event) => setQuery(event.target.value)} /></div><button className="primary" onClick={() => openTask('daily')}>Create</button></header>
+      <header className="topbar"><button className="menu" aria-label="Open navigation" onClick={() => setMobileOpen(true)}>☰</button><div className="planner-heading"><span className="eyebrow">WORLD-CLASS PLANNER</span><h1>{views.find((item) => item.id === view)?.label || 'Command'}</h1></div><div className="search"><span>⌕</span><input placeholder="Search tasks, tax, invoices, CRM, NDIS, files..." value={query} onChange={(event) => setQuery(event.target.value)} /></div><a className="xavier-chat-entry" href="/xavier">Xavier Chat</a><button className="primary" onClick={() => openTask('daily')}>Create</button></header>
       {entitlement.premiumUi && <LivingLayoutStage
         layout={livingLayout}
         phase={xavierPhase}
